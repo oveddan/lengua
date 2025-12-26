@@ -91,14 +91,20 @@ export default function Home() {
             </Link>
           )}
           <Link
-            href="/add"
+            href="/chat"
             className="flex-1 bg-secondary text-white py-4 px-6 rounded-lg text-center font-semibold hover:bg-secondary-hover transition"
+          >
+            Chat Assistant
+          </Link>
+          <Link
+            href="/add"
+            className="flex-1 bg-accent text-white py-4 px-6 rounded-lg text-center font-semibold hover:bg-accent-hover transition"
           >
             Add New Words
           </Link>
           <Link
             href="/export"
-            className="flex-1 bg-accent text-white py-4 px-6 rounded-lg text-center font-semibold hover:bg-accent-hover transition"
+            className="flex-1 bg-surface border border-border text-text py-4 px-6 rounded-lg text-center font-semibold hover:bg-background transition"
           >
             Export to Anki
           </Link>

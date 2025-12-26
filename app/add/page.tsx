@@ -54,7 +54,7 @@ export default function AddPage() {
   const searchParams = useSearchParams();
   const [decks, setDecks] = useState<Deck[]>([]);
   const [selectedDeck, setSelectedDeck] = useState(searchParams.get('deck') || '');
-  const [sentence, setSentence] = useState('');
+  const [sentence, setSentence] = useState(searchParams.get('sentence') || '');
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState<Step>('input');
 
