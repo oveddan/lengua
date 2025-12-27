@@ -14,6 +14,7 @@ Spanish flashcard app for vocabulary learning with spaced repetition (SM-2 algor
 5. **Review Cards**: SM-2 spaced repetition with cloze-style cards, randomized order, English-only hints
 6. **Deck Organization**: Group cards into decks, filter reviews by deck
 7. **Export**: Download deck as Anki-importable file
+8. **Chat Assistant**: WhatsApp conversation helper with natural language input, session persistence, and card creation flow
 
 ## Commands
 
@@ -60,6 +61,8 @@ pnpm test:db                                  # Test database operations
 Deck: id, name, created_at
 Card: id, deck_id, spanish_word, translation, context_sentence, cloze_sentence,
       interval, ease_factor, next_review, review_count, created_at
+ChatSession: id, name, created_at, updated_at
+ChatExchange: id, session_id, input, intent, response_main, response_json, created_at
 ```
 
 ### API Routes (`app/api/`)
@@ -70,14 +73,18 @@ Card: id, deck_id, spanish_word, translation, context_sentence, cloze_sentence,
 - `GET/POST/DELETE /api/decks` - Deck CRUD (GET includes stats)
 - `POST /api/review` - Submit card review (updates SM-2 scheduling)
 - `GET /api/export` - Export deck to Anki format
+- `POST /api/chat-assist` - Smart assistant with intent detection (english_to_spanish, spanish_to_english, lookup, validation)
+- `GET/POST/PATCH/DELETE /api/chat-sessions` - Chat session CRUD
+- `GET/DELETE /api/chat-exchanges` - Chat exchange listing and deletion
 
 ### UI Pages (`app/`)
 
 - **Home (`/`)**: List decks with Review/Add/Delete buttons, stats (due cards, total cards, deck count)
-- **Add (`/add?deck=id`)**: Multi-step flow - enter sentence → select words/phrases/conjugations with checkboxes → preview cards with enable/disable toggles → save to deck
+- **Add (`/add?deck=id&sentence=text`)**: Multi-step flow - enter sentence → select words/phrases/conjugations with checkboxes → preview cards with enable/disable toggles → save to deck. Supports `sentence` query param for pre-population from Chat.
 - **Review (`/review?deck=id`)**: Cloze cards with English hint only, randomized order, Again/Hard/Good/Easy buttons with interval preview
 - **Deck (`/deck/[id]`)**: Browse cards in a deck, delete individual cards
 - **Export (`/export`)**: Select deck, download Anki file
+- **Chat (`/chat`)**: WhatsApp conversation assistant - natural language input ("How do you say...", paste Spanish, "Is this correct:"), session management, conversation context, "Make Cards" links to /add flow
 
 ### Cloze Generation
 
