@@ -13,9 +13,11 @@ interface SelectedWord {
 }
 
 export async function POST(request: NextRequest) {
-  const { originalSentence, selectedWords } = await request.json() as {
+  const { originalSentence, selectedWords, skipOriginal, userContext } = await request.json() as {
     originalSentence: string;
     selectedWords: SelectedWord[];
+    skipOriginal?: boolean; // For lookups, skip the original sentence and only use generated ones
+    userContext?: string; // Original user query to provide context for generating relevant sentences
   };
 
   if (!originalSentence || !selectedWords || selectedWords.length === 0) {
@@ -34,22 +36,27 @@ export async function POST(request: NextRequest) {
       `$1{{c1::${word.spanish}}}$2`
     );
 
-    // Original sentence card
-    cards.push({
-      spanish_word: baseForm,
-      translation: word.english,
-      context_sentence: originalSentence,
-      cloze_sentence: cloze,
-    });
+    // Original sentence card (skip for lookups where original is explanatory text)
+    if (!skipOriginal) {
+      cards.push({
+        spanish_word: baseForm,
+        translation: word.english,
+        context_sentence: originalSentence,
+        cloze_sentence: cloze,
+      });
+    }
 
     // Generate extra sentences if requested
     if (word.extraSentences > 0) {
+      const contextHint = userContext
+        ? `\n- IMPORTANT: The user is learning this word in the context of: "${userContext}". Generate sentences relevant to this context.`
+        : '';
+
       const extraPrompt = `Generate ${word.extraSentences} additional Spanish sentences using the word "${baseForm}" (${word.english}).
 
 Requirements:
 - Beginner to intermediate level
-- Different contexts from: "${originalSentence}"
-- Natural, everyday usage
+- Natural, everyday usage${contextHint}
 
 Respond in JSON only:
 {

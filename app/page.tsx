@@ -1,7 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
+import {
+  StatsGrid,
+  QuickActions,
+  DeckList,
+  ReviewIcon,
+  ChatIcon,
+  AddIcon,
+  ExportIcon,
+} from './components';
 
 interface Deck {
   id: string;
@@ -64,51 +72,33 @@ export default function Home() {
         <h1 className="text-3xl font-bold text-text mb-2">Spanish Flashcards</h1>
         <p className="text-text-secondary mb-8">Learn Spanish with spaced repetition</p>
 
-        {/* Stats */}
-        <div className="grid grid-cols-3 gap-4 mb-8">
-          <div className="bg-surface p-4 rounded-lg shadow-card border border-border">
-            <div className="text-3xl font-bold text-primary">{stats.dueCards}</div>
-            <div className="text-text-secondary">Cards Due</div>
-          </div>
-          <div className="bg-surface p-4 rounded-lg shadow-card border border-border">
-            <div className="text-3xl font-bold text-secondary">{stats.totalCards}</div>
-            <div className="text-text-secondary">Total Cards</div>
-          </div>
-          <div className="bg-surface p-4 rounded-lg shadow-card border border-border">
-            <div className="text-3xl font-bold text-accent">{stats.totalDecks}</div>
-            <div className="text-text-secondary">Decks</div>
-          </div>
-        </div>
+        <StatsGrid
+          stats={[
+            {
+              label: 'Cards Due',
+              value: stats.dueCards,
+              subtitle: stats.dueCards > 0 ? 'ready to review' : undefined,
+              highlight: true,
+            },
+            { label: 'Total Cards', value: stats.totalCards, subtitle: 'in library' },
+            { label: 'Decks', value: stats.totalDecks, subtitle: 'collections' },
+          ]}
+        />
 
-        {/* Quick Actions */}
-        <div className="flex gap-4 mb-8">
-          {stats.dueCards > 0 && (
-            <Link
-              href="/review"
-              className="flex-1 bg-primary text-white py-4 px-6 rounded-lg text-center font-semibold hover:bg-primary-hover transition"
-            >
-              Review {stats.dueCards} Cards
-            </Link>
-          )}
-          <Link
-            href="/chat"
-            className="flex-1 bg-secondary text-white py-4 px-6 rounded-lg text-center font-semibold hover:bg-secondary-hover transition"
-          >
-            Chat Assistant
-          </Link>
-          <Link
-            href="/add"
-            className="flex-1 bg-accent text-white py-4 px-6 rounded-lg text-center font-semibold hover:bg-accent-hover transition"
-          >
-            Add New Words
-          </Link>
-          <Link
-            href="/export"
-            className="flex-1 bg-surface border border-border text-text py-4 px-6 rounded-lg text-center font-semibold hover:bg-background transition"
-          >
-            Export to Anki
-          </Link>
-        </div>
+        <QuickActions
+          actions={[
+            {
+              href: '/review',
+              icon: <ReviewIcon />,
+              label: `Review (${stats.dueCards})`,
+              variant: 'primary',
+              show: stats.dueCards > 0,
+            },
+            { href: '/chat', icon: <ChatIcon />, label: 'Chat Assistant', variant: 'secondary' },
+            { href: '/add', icon: <AddIcon />, label: 'Add Words', variant: 'accent' },
+            { href: '/export', icon: <ExportIcon />, label: 'Export to Anki', variant: 'outline' },
+          ]}
+        />
 
         {/* Create Deck */}
         <form onSubmit={createDeck} className="flex gap-2 mb-8">
@@ -127,44 +117,8 @@ export default function Home() {
           </button>
         </form>
 
-        {/* Deck List */}
         <h2 className="text-xl font-semibold text-text mb-4">Your Decks</h2>
-        {decks.length === 0 ? (
-          <p className="text-text-muted">No decks yet. Create one above!</p>
-        ) : (
-          <div className="space-y-2">
-            {decks.map((deck) => (
-              <div
-                key={deck.id}
-                className="bg-surface p-4 rounded-lg shadow-card border border-border flex justify-between items-center"
-              >
-                <Link href={`/deck/${deck.id}`} className="font-medium text-text hover:text-primary">
-                  {deck.name}
-                </Link>
-                <div className="flex gap-2">
-                  <Link
-                    href={`/review?deck=${deck.id}`}
-                    className="px-3 py-1 text-sm bg-primary text-white rounded hover:opacity-80"
-                  >
-                    Review
-                  </Link>
-                  <Link
-                    href={`/add?deck=${deck.id}`}
-                    className="px-3 py-1 text-sm bg-success-light text-success rounded hover:opacity-80"
-                  >
-                    Add
-                  </Link>
-                  <button
-                    onClick={() => deleteDeck(deck.id)}
-                    className="px-3 py-1 text-sm bg-error-light text-error rounded hover:opacity-80"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        <DeckList decks={decks} onDelete={deleteDeck} />
       </div>
     </div>
   );

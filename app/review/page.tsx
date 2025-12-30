@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 
 interface Card {
@@ -20,7 +20,9 @@ type Quality = 'again' | 'hard' | 'good' | 'easy';
 
 export default function ReviewPage() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const deckId = searchParams.get('deck');
+  const cardId = searchParams.get('card');
 
   const [cards, setCards] = useState<Card[]>([]);
   const [deckName, setDeckName] = useState<string>('');
@@ -29,27 +31,96 @@ export default function ReviewPage() {
   const [loading, setLoading] = useState(true);
   const [reviewing, setReviewing] = useState(false);
 
-  useEffect(() => {
-    fetchDueCards();
-  }, [deckId]);
+  // Edit modal state
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editSpanishWord, setEditSpanishWord] = useState('');
+  const [editTranslation, setEditTranslation] = useState('');
+  const [editContextSentence, setEditContextSentence] = useState('');
+  const [editClozeSentence, setEditClozeSentence] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
-  async function fetchDueCards() {
-    let url = '/api/cards?due=true';
-    if (deckId) {
-      url += `&deckId=${deckId}`;
-      // Fetch deck name
-      const decksRes = await fetch('/api/decks');
-      const decksData = await decksRes.json();
-      const deck = decksData.decks.find((d: { id: string; name: string }) => d.id === deckId);
-      if (deck) setDeckName(deck.name);
-    }
-    const res = await fetch(url);
-    const data = await res.json();
-    // Shuffle cards randomly
-    const shuffled = [...data].sort(() => Math.random() - 0.5);
-    setCards(shuffled);
-    setLoading(false);
+  const sessionKey = `review-order-${deckId || 'all'}`;
+
+  // Update URL when card changes
+  function updateUrlWithCard(id: string) {
+    const params = new URLSearchParams();
+    if (deckId) params.set('deck', deckId);
+    params.set('card', id);
+    router.replace(`/review?${params.toString()}`, { scroll: false });
   }
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function fetchDueCards() {
+      let url = '/api/cards?due=true';
+      if (deckId) {
+        url += `&deckId=${deckId}`;
+        // Fetch deck name
+        const decksRes = await fetch('/api/decks');
+        const decksData = await decksRes.json();
+        const deck = decksData.decks.find((d: { id: string; name: string }) => d.id === deckId);
+        if (deck && !cancelled) setDeckName(deck.name);
+      }
+      const res = await fetch(url);
+      const data: Card[] = await res.json();
+
+      if (cancelled) return;
+
+      // Try to restore order from sessionStorage
+      const storedOrder = sessionStorage.getItem(sessionKey);
+      let orderedCards: Card[];
+
+      if (storedOrder) {
+        const orderIds: string[] = JSON.parse(storedOrder);
+        // Filter to only cards that are still due
+        const currentIds = new Set(data.map((c) => c.id));
+        const validOrderIds = orderIds.filter((id) => currentIds.has(id));
+        // Map IDs back to cards, add any new cards at the end
+        const cardMap = new Map(data.map((c) => [c.id, c]));
+        orderedCards = validOrderIds.map((id) => cardMap.get(id)!);
+        // Add any cards not in stored order (newly due)
+        const orderedSet = new Set(validOrderIds);
+        const newCards = data.filter((c) => !orderedSet.has(c.id));
+        orderedCards = [...orderedCards, ...newCards];
+      } else {
+        // Shuffle cards randomly and store order
+        orderedCards = [...data].sort(() => Math.random() - 0.5);
+        sessionStorage.setItem(sessionKey, JSON.stringify(orderedCards.map((c) => c.id)));
+      }
+
+      setCards(orderedCards);
+
+      // Restore position from URL card param
+      if (cardId && orderedCards.length > 0) {
+        const idx = orderedCards.findIndex((c) => c.id === cardId);
+        if (idx !== -1) {
+          setCurrentIndex(idx);
+        } else if (orderedCards.length > 0) {
+          // Card no longer exists, go to first card
+          const params = new URLSearchParams();
+          if (deckId) params.set('deck', deckId);
+          params.set('card', orderedCards[0].id);
+          router.replace(`/review?${params.toString()}`, { scroll: false });
+        }
+      } else if (orderedCards.length > 0) {
+        // No card in URL, set it to first card
+        const params = new URLSearchParams();
+        if (deckId) params.set('deck', deckId);
+        params.set('card', orderedCards[0].id);
+        router.replace(`/review?${params.toString()}`, { scroll: false });
+      }
+
+      setLoading(false);
+    }
+
+    fetchDueCards();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [deckId, cardId, sessionKey, router]);
 
   async function handleReview(quality: Quality) {
     const card = cards[currentIndex];
@@ -65,11 +136,126 @@ export default function ReviewPage() {
     setShowAnswer(false);
 
     if (currentIndex < cards.length - 1) {
-      setCurrentIndex(currentIndex + 1);
+      const nextIndex = currentIndex + 1;
+      setCurrentIndex(nextIndex);
+      updateUrlWithCard(cards[nextIndex].id);
     } else {
-      // All cards reviewed
+      // All cards reviewed - clear session storage and URL
+      sessionStorage.removeItem(sessionKey);
+      router.replace(deckId ? `/review?deck=${deckId}` : '/review', { scroll: false });
       setCards([]);
     }
+  }
+
+  function openEditModal() {
+    const card = cards[currentIndex];
+    setEditSpanishWord(card.spanish_word);
+    setEditTranslation(card.translation);
+    setEditContextSentence(card.context_sentence || '');
+
+    // Generate cloze if not stored
+    let cloze = card.cloze_sentence || '';
+    if (!cloze && card.context_sentence) {
+      // Generate cloze from context sentence
+      const wordToFind = card.spanish_word.includes('(')
+        ? card.spanish_word.split('(')[0].trim()
+        : card.spanish_word;
+      const escaped = wordToFind.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(`(^|[\\s¿¡])(${escaped})([\\s.,!?;:]|$)`, 'gi');
+      cloze = card.context_sentence.replace(regex, (_, before, word, after) => {
+        return `${before}{{c1::${word}}}${after}`;
+      });
+      // If no match found, create simple cloze
+      if (!cloze.includes('{{c1::')) {
+        cloze = `{{c1::${card.spanish_word}}}`;
+      }
+    } else if (!cloze) {
+      cloze = `{{c1::${card.spanish_word}}}`;
+    }
+
+    setEditClozeSentence(cloze);
+    setConfirmDelete(false);
+    setEditModalOpen(true);
+  }
+
+  function closeEditModal() {
+    setEditModalOpen(false);
+    setConfirmDelete(false);
+  }
+
+  async function handleSaveEdit() {
+    const card = cards[currentIndex];
+    setSaving(true);
+
+    const res = await fetch(`/api/cards?id=${card.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        spanish_word: editSpanishWord,
+        translation: editTranslation,
+        context_sentence: editContextSentence || null,
+        cloze_sentence: editClozeSentence || null,
+      }),
+    });
+
+    if (res.ok) {
+      // Update the card in state
+      const updatedCards = [...cards];
+      updatedCards[currentIndex] = {
+        ...card,
+        spanish_word: editSpanishWord,
+        translation: editTranslation,
+        context_sentence: editContextSentence || null,
+        cloze_sentence: editClozeSentence || null,
+      };
+      setCards(updatedCards);
+      closeEditModal();
+    }
+
+    setSaving(false);
+  }
+
+  async function handleDeleteCard() {
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
+    }
+
+    const card = cards[currentIndex];
+    setSaving(true);
+
+    const res = await fetch(`/api/cards?id=${card.id}`, {
+      method: 'DELETE',
+    });
+
+    if (res.ok) {
+      // Remove card from list
+      const updatedCards = cards.filter((_, i) => i !== currentIndex);
+      setCards(updatedCards);
+
+      // Update session storage with new order
+      sessionStorage.setItem(sessionKey, JSON.stringify(updatedCards.map((c) => c.id)));
+
+      // Adjust index if needed
+      let newIndex = currentIndex;
+      if (currentIndex >= updatedCards.length && updatedCards.length > 0) {
+        newIndex = updatedCards.length - 1;
+        setCurrentIndex(newIndex);
+      }
+
+      // Update URL
+      if (updatedCards.length > 0) {
+        updateUrlWithCard(updatedCards[newIndex].id);
+      } else {
+        sessionStorage.removeItem(sessionKey);
+        router.replace(deckId ? `/review?deck=${deckId}` : '/review', { scroll: false });
+      }
+
+      setShowAnswer(false);
+      closeEditModal();
+    }
+
+    setSaving(false);
   }
 
   function renderCloze(cloze: string, reveal: boolean, spanishWord: string) {
@@ -189,6 +375,12 @@ export default function ReviewPage() {
               {card.context_sentence && card.context_sentence !== card.cloze_sentence?.replace(/\{\{c1::(.+?)\}\}/g, '$1') && (
                 <div className="text-text-secondary text-sm mt-2">{card.context_sentence}</div>
               )}
+              <button
+                onClick={openEditModal}
+                className="mt-3 text-sm text-primary hover:underline"
+              >
+                Edit card
+              </button>
             </div>
           )}
         </div>
@@ -231,6 +423,99 @@ export default function ReviewPage() {
           </div>
         )}
       </div>
+
+      {/* Edit Modal */}
+      {editModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-surface rounded-xl shadow-card border border-border p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <h2 className="text-xl font-bold text-text mb-4">Edit Card</h2>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-1">
+                  Spanish Word/Phrase
+                </label>
+                <input
+                  type="text"
+                  value={editSpanishWord}
+                  onChange={(e) => setEditSpanishWord(e.target.value)}
+                  className="w-full px-4 py-2 border border-border rounded-lg bg-background text-text focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-1">
+                  Translation
+                </label>
+                <input
+                  type="text"
+                  value={editTranslation}
+                  onChange={(e) => setEditTranslation(e.target.value)}
+                  className="w-full px-4 py-2 border border-border rounded-lg bg-background text-text focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-1">
+                  Context Sentence
+                </label>
+                <textarea
+                  value={editContextSentence}
+                  onChange={(e) => setEditContextSentence(e.target.value)}
+                  rows={2}
+                  className="w-full px-4 py-2 border border-border rounded-lg bg-background text-text focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-1">
+                  Cloze Sentence
+                </label>
+                <textarea
+                  value={editClozeSentence}
+                  onChange={(e) => setEditClozeSentence(e.target.value)}
+                  rows={2}
+                  placeholder="Use {{c1::word}} for cloze deletion"
+                  className="w-full px-4 py-2 border border-border rounded-lg bg-background text-text focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+                <p className="text-xs text-text-muted mt-1">
+                  Wrap the word to hide with {"{{c1::word}}"}
+                </p>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={handleSaveEdit}
+                  disabled={saving || !editSpanishWord || !editTranslation}
+                  className="flex-1 py-2 bg-primary text-white rounded-lg font-medium hover:opacity-90 transition disabled:opacity-50"
+                >
+                  {saving ? 'Saving...' : 'Save Changes'}
+                </button>
+                <button
+                  onClick={closeEditModal}
+                  className="px-6 py-2 border border-border text-text rounded-lg hover:bg-background transition"
+                >
+                  Cancel
+                </button>
+              </div>
+
+              <div className="pt-4 border-t border-border">
+                <button
+                  onClick={handleDeleteCard}
+                  disabled={saving}
+                  className={`w-full py-2 rounded-lg transition ${
+                    confirmDelete
+                      ? 'bg-red-500 text-white hover:bg-red-600'
+                      : 'text-red-500 hover:bg-red-500/10'
+                  }`}
+                >
+                  {confirmDelete ? 'Click again to confirm delete' : 'Delete Card'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

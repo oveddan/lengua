@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
+import { InlineCardSelector, InlineCardState, CardPreview } from '../components';
 
 interface ChatSession {
   id: string;
@@ -49,6 +50,10 @@ export default function ChatPage() {
   // Deck state for navigation to /add
   const [decks, setDecks] = useState<Deck[]>([]);
   const [selectedDeck, setSelectedDeck] = useState<string>('');
+
+  // Inline card creation state
+  const [inlineCardStates, setInlineCardStates] = useState<Map<string, InlineCardState>>(new Map());
+  const [activeCardExchangeId, setActiveCardExchangeId] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchData() {
@@ -203,6 +208,385 @@ export default function ChatPage() {
     window.location.href = `/add?${params.toString()}`;
   }
 
+  // Inline card creation functions
+  async function startCardCreation(exchange: ChatExchange) {
+    // If already active for this exchange, close it
+    if (activeCardExchangeId === exchange.id) {
+      setActiveCardExchangeId(null);
+      return;
+    }
+
+    // Set this exchange as active
+    setActiveCardExchangeId(exchange.id);
+
+    // Check if we already have analysis for this exchange
+    const existingState = inlineCardStates.get(exchange.id);
+    if (existingState && existingState.analysis) {
+      return; // Already analyzed, just show the UI
+    }
+
+    // Set loading state
+    setInlineCardStates((prev) => {
+      const next = new Map(prev);
+      next.set(exchange.id, {
+        exchangeId: exchange.id,
+        intent: exchange.intent,
+        userInput: exchange.input,
+        status: 'loading',
+        analysis: null,
+        phrases: [],
+        words: [],
+        cards: [],
+        selectedVerbForConjugation: null,
+        verbConjugations: null,
+        selectedConjugations: new Set<string>(),
+        error: null,
+      });
+      return next;
+    });
+
+    // Get Spanish text to analyze
+    const spanishText = exchange.intent === 'spanish_to_english'
+      ? exchange.input
+      : exchange.response_main;
+
+    // Fetch analysis
+    const res = await fetch('/api/translate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sentence: spanishText }),
+    });
+
+    if (!res.ok) {
+      setInlineCardStates((prev) => {
+        const next = new Map(prev);
+        next.set(exchange.id, {
+          exchangeId: exchange.id,
+          intent: exchange.intent,
+          userInput: exchange.input,
+          status: 'selecting',
+          analysis: null,
+          phrases: [],
+          words: [],
+          cards: [],
+          selectedVerbForConjugation: null,
+          verbConjugations: null,
+          selectedConjugations: new Set<string>(),
+          error: 'Failed to analyze text',
+        });
+        return next;
+      });
+      return;
+    }
+
+    const analysis = await res.json();
+
+    // Update state with analysis
+    setInlineCardStates((prev) => {
+      const next = new Map(prev);
+      next.set(exchange.id, {
+        exchangeId: exchange.id,
+        intent: exchange.intent,
+        userInput: exchange.input,
+        status: 'selecting',
+        analysis,
+        phrases: analysis.phrases.map((p: { spanish: string; english: string; base_form: string }) => ({
+          ...p,
+          selected: false,
+        })),
+        words: analysis.words.map((w: { spanish: string; english: string; base_form: string }) => ({
+          ...w,
+          selected: false,
+        })),
+        cards: [],
+        selectedVerbForConjugation: null,
+        verbConjugations: null,
+        selectedConjugations: new Set<string>(),
+        error: null,
+      });
+      return next;
+    });
+  }
+
+  function toggleWord(exchangeId: string, type: 'phrase' | 'word', index: number) {
+    setInlineCardStates((prev) => {
+      const next = new Map(prev);
+      const state = next.get(exchangeId);
+      if (!state) return prev;
+
+      if (type === 'phrase') {
+        const newPhrases = [...state.phrases];
+        newPhrases[index] = { ...newPhrases[index], selected: !newPhrases[index].selected };
+        next.set(exchangeId, { ...state, phrases: newPhrases });
+      } else {
+        const newWords = [...state.words];
+        newWords[index] = { ...newWords[index], selected: !newWords[index].selected };
+        next.set(exchangeId, { ...state, words: newWords });
+      }
+      return next;
+    });
+  }
+
+  async function fetchConjugations(exchangeId: string, verb: string) {
+    const state = inlineCardStates.get(exchangeId);
+    if (!state) return;
+
+    // Set loading conjugations state
+    setInlineCardStates((prev) => {
+      const next = new Map(prev);
+      next.set(exchangeId, { ...state, status: 'loadingConjugations', selectedVerbForConjugation: verb });
+      return next;
+    });
+
+    // Fetch conjugations for the verb
+    const res = await fetch('/api/translate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sentence: verb }),
+    });
+
+    if (!res.ok) {
+      setInlineCardStates((prev) => {
+        const next = new Map(prev);
+        next.set(exchangeId, { ...state, status: 'selecting', error: 'Failed to load conjugations' });
+        return next;
+      });
+      return;
+    }
+
+    const data = await res.json();
+
+    if (!data.is_verb || !data.conjugations) {
+      setInlineCardStates((prev) => {
+        const next = new Map(prev);
+        next.set(exchangeId, { ...state, status: 'selecting', error: `${verb} is not a verb` });
+        return next;
+      });
+      return;
+    }
+
+    // Get word translation for this verb
+    const wordInfo = state.words.find((w) => w.base_form === verb);
+
+    setInlineCardStates((prev) => {
+      const next = new Map(prev);
+      next.set(exchangeId, {
+        ...state,
+        status: 'selecting',
+        selectedVerbForConjugation: verb,
+        verbConjugations: {
+          infinitive: data.infinitive,
+          translation: wordInfo?.english || data.translation,
+          present: data.conjugations.present,
+          preterite: data.conjugations.preterite,
+          imperative: data.conjugations.imperative,
+        },
+        selectedConjugations: new Set<string>(),
+        error: null,
+      });
+      return next;
+    });
+  }
+
+  function toggleConjugation(exchangeId: string, tense: string, index: number) {
+    setInlineCardStates((prev) => {
+      const next = new Map(prev);
+      const state = next.get(exchangeId);
+      if (!state) return prev;
+
+      const key = `${tense}-${index}`;
+      const newSelected = new Set(state.selectedConjugations);
+      if (newSelected.has(key)) {
+        newSelected.delete(key);
+      } else {
+        newSelected.add(key);
+      }
+      next.set(exchangeId, { ...state, selectedConjugations: newSelected });
+      return next;
+    });
+  }
+
+  function clearConjugations(exchangeId: string) {
+    setInlineCardStates((prev) => {
+      const next = new Map(prev);
+      const state = next.get(exchangeId);
+      if (!state) return prev;
+
+      next.set(exchangeId, {
+        ...state,
+        selectedVerbForConjugation: null,
+        verbConjugations: null,
+        selectedConjugations: new Set<string>(),
+      });
+      return next;
+    });
+  }
+
+  async function generateCardsForExchange(exchangeId: string) {
+    const state = inlineCardStates.get(exchangeId);
+    if (!state || !state.analysis) return;
+
+    // For lookups, the "original sentence" is explanatory text, not a proper Spanish sentence
+    // We need to generate example sentences for lookups
+    const isLookup = state.intent === 'lookup';
+
+    const selectedItems = [
+      ...state.phrases.filter((p) => p.selected).map((p) => ({
+        ...p,
+        extraSentences: isLookup ? 1 : 0,
+      })),
+      ...state.words.filter((w) => w.selected).map((w) => ({
+        ...w,
+        extraSentences: isLookup ? 1 : 0,
+      })),
+    ];
+
+    const hasSelectedConjugations = state.selectedConjugations.size > 0;
+
+    if (selectedItems.length === 0 && !hasSelectedConjugations) return;
+
+    // Set generating state
+    setInlineCardStates((prev) => {
+      const next = new Map(prev);
+      next.set(exchangeId, { ...state, status: 'generating' });
+      return next;
+    });
+
+    let wordCards: CardPreview[] = [];
+
+    // Generate word/phrase cards via API (only uses original sentence)
+    if (selectedItems.length > 0) {
+      const generateRes = await fetch('/api/generate-cards', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          originalSentence: state.analysis.original_sentence,
+          selectedWords: selectedItems,
+          skipOriginal: isLookup, // For lookups, skip the explanatory text and only use generated sentences
+          userContext: isLookup ? state.userInput : undefined, // Provide context for generating relevant sentences
+        }),
+      });
+
+      if (!generateRes.ok) {
+        setInlineCardStates((prev) => {
+          const next = new Map(prev);
+          next.set(exchangeId, { ...state, status: 'selecting', error: 'Failed to generate cards' });
+          return next;
+        });
+        return;
+      }
+
+      const { cards } = await generateRes.json();
+      wordCards = cards.map((c: CardPreview) => ({ ...c, enabled: true }));
+    }
+
+    // Generate conjugation cards (these use their own sentences from the API)
+    const conjugationCards: CardPreview[] = [];
+    if (hasSelectedConjugations && state.verbConjugations) {
+      const tenses = ['present', 'preterite', 'imperative'] as const;
+      for (const tense of tenses) {
+        const items = state.verbConjugations[tense];
+        items.forEach((item, index) => {
+          if (state.selectedConjugations.has(`${tense}-${index}`)) {
+            // Create cloze from the conjugation's own sentence
+            const escaped = item.form.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const cloze = item.sentence.replace(
+              new RegExp(`(^|[\\s¿¡])${escaped}([\\s.,!?;:]|$)`, 'gi'),
+              `$1{{c1::${item.form}}}$2`
+            );
+            conjugationCards.push({
+              spanish_word: `${state.verbConjugations!.infinitive} (${item.pronoun} ${tense})`,
+              translation: item.sentence_english,
+              context_sentence: item.sentence,
+              cloze_sentence: cloze,
+              enabled: true,
+            });
+          }
+        });
+      }
+    }
+
+    // Combine all cards
+    const allCards = [...wordCards, ...conjugationCards];
+
+    // Set previewing state with generated cards
+    setInlineCardStates((prev) => {
+      const next = new Map(prev);
+      next.set(exchangeId, {
+        ...state,
+        status: 'previewing',
+        cards: allCards,
+        error: null,
+      });
+      return next;
+    });
+  }
+
+  function toggleCard(exchangeId: string, index: number) {
+    setInlineCardStates((prev) => {
+      const next = new Map(prev);
+      const state = next.get(exchangeId);
+      if (!state) return prev;
+
+      const newCards = [...state.cards];
+      newCards[index] = { ...newCards[index], enabled: !newCards[index].enabled };
+      next.set(exchangeId, { ...state, cards: newCards });
+      return next;
+    });
+  }
+
+  function goBackToSelect(exchangeId: string) {
+    setInlineCardStates((prev) => {
+      const next = new Map(prev);
+      const state = next.get(exchangeId);
+      if (!state) return prev;
+
+      next.set(exchangeId, { ...state, status: 'selecting', cards: [] });
+      return next;
+    });
+  }
+
+  async function saveCardsInline(exchangeId: string) {
+    const state = inlineCardStates.get(exchangeId);
+    if (!state || !selectedDeck) return;
+
+    const enabledCards = state.cards.filter((c) => c.enabled);
+    if (enabledCards.length === 0) return;
+
+    // Set saving state
+    setInlineCardStates((prev) => {
+      const next = new Map(prev);
+      next.set(exchangeId, { ...state, status: 'saving' });
+      return next;
+    });
+
+    // Save each enabled card
+    for (const card of enabledCards) {
+      await fetch('/api/cards', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          deck_id: selectedDeck,
+          spanish_word: card.spanish_word,
+          translation: card.translation,
+          context_sentence: card.context_sentence,
+          cloze_sentence: card.cloze_sentence,
+        }),
+      });
+    }
+
+    // Set saved state
+    setInlineCardStates((prev) => {
+      const next = new Map(prev);
+      next.set(exchangeId, { ...state, status: 'saved', savedCount: enabledCards.length });
+      return next;
+    });
+  }
+
+  function cancelCardCreation() {
+    setActiveCardExchangeId(null);
+  }
+
   return (
     <div className="min-h-screen bg-background flex">
       {/* Sessions Sidebar */}
@@ -312,6 +696,8 @@ export default function ChatPage() {
 
           {exchanges.map((exchange) => {
             const responseData = parseResponseJson(exchange.response_json);
+            const inlineState = inlineCardStates.get(exchange.id);
+            const isActive = activeCardExchangeId === exchange.id;
             return (
               <div key={exchange.id} className="space-y-2">
                 {/* User message */}
@@ -358,14 +744,37 @@ export default function ChatPage() {
                         Copy
                       </button>
                       <button
-                        onClick={() => goToAddPage(exchange)}
+                        onClick={() => startCardCreation(exchange)}
                         className="text-xs text-secondary hover:underline"
                       >
-                        Make Cards
+                        {isActive ? 'Close' : 'Make Cards'}
+                      </button>
+                      <button
+                        onClick={() => goToAddPage(exchange)}
+                        className="text-xs text-text-muted hover:underline"
+                      >
+                        Full Editor
                       </button>
                     </div>
                   </div>
                 </div>
+
+                {/* Inline Card Selector */}
+                {isActive && inlineState && (
+                  <InlineCardSelector
+                    state={inlineState}
+                    onToggleWord={(type, index) => toggleWord(exchange.id, type, index)}
+                    onFetchConjugations={(verb) => fetchConjugations(exchange.id, verb)}
+                    onToggleConjugation={(tense, index) => toggleConjugation(exchange.id, tense, index)}
+                    onClearConjugations={() => clearConjugations(exchange.id)}
+                    onGenerate={() => generateCardsForExchange(exchange.id)}
+                    onToggleCard={(index) => toggleCard(exchange.id, index)}
+                    onSave={() => saveCardsInline(exchange.id)}
+                    onBack={() => goBackToSelect(exchange.id)}
+                    onCancel={cancelCardCreation}
+                    deckName={decks.find((d) => d.id === selectedDeck)?.name || 'Unknown'}
+                  />
+                )}
               </div>
             );
           })}

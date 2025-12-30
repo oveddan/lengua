@@ -3,6 +3,14 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import {
+  StepIndicator,
+  SelectableCard,
+  ConjugationSection,
+  Card,
+  CardHeader,
+  CardContent,
+} from '../components';
 
 interface Deck {
   id: string;
@@ -58,15 +66,10 @@ export default function AddPage() {
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState<Step>('input');
 
-  // Analysis results
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [phrases, setPhrases] = useState<WordItem[]>([]);
   const [words, setWords] = useState<WordItem[]>([]);
-
-  // Selected conjugations (for verbs)
   const [selectedConjugations, setSelectedConjugations] = useState<Set<string>>(new Set());
-
-  // Generated cards
   const [cards, setCards] = useState<CardPreview[]>([]);
   const [saved, setSaved] = useState(false);
 
@@ -81,12 +84,17 @@ export default function AddPage() {
       });
   }, [selectedDeck]);
 
+  const steps = [
+    { name: 'Enter Text', status: step === 'input' ? 'current' : 'complete' },
+    { name: 'Select Words', status: step === 'select' ? 'current' : step === 'preview' ? 'complete' : 'upcoming' },
+    { name: 'Review Cards', status: step === 'preview' ? 'current' : 'upcoming' },
+  ] as const;
+
   async function analyzeSentence(e: React.FormEvent) {
     e.preventDefault();
     if (!sentence.trim()) return;
 
     setLoading(true);
-
     const res = await fetch('/api/translate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -95,23 +103,8 @@ export default function AddPage() {
 
     const data: AnalysisResult = await res.json();
     setAnalysis(data);
-
-    // Initialize phrases and words with selection state
-    setPhrases(
-      data.phrases.map((p) => ({
-        ...p,
-        selected: false,
-        extraSentences: 1,
-      }))
-    );
-    setWords(
-      data.words.map((w) => ({
-        ...w,
-        selected: false,
-        extraSentences: 1,
-      }))
-    );
-
+    setPhrases(data.phrases.map((p) => ({ ...p, selected: false, extraSentences: 1 })));
+    setWords(data.words.map((w) => ({ ...w, selected: false, extraSentences: 1 })));
     setSelectedConjugations(new Set());
     setLoading(false);
     setStep('select');
@@ -121,46 +114,31 @@ export default function AddPage() {
     const key = `${tense}-${index}`;
     setSelectedConjugations((prev) => {
       const newSet = new Set(prev);
-      if (newSet.has(key)) {
-        newSet.delete(key);
-      } else {
-        newSet.add(key);
-      }
+      if (newSet.has(key)) newSet.delete(key);
+      else newSet.add(key);
       return newSet;
     });
   }
 
   function toggleItem(type: 'phrase' | 'word', index: number) {
     if (type === 'phrase') {
-      setPhrases((prev) =>
-        prev.map((p, i) => (i === index ? { ...p, selected: !p.selected } : p))
-      );
+      setPhrases((prev) => prev.map((p, i) => (i === index ? { ...p, selected: !p.selected } : p)));
     } else {
-      setWords((prev) =>
-        prev.map((w, i) => (i === index ? { ...w, selected: !w.selected } : w))
-      );
+      setWords((prev) => prev.map((w, i) => (i === index ? { ...w, selected: !w.selected } : w)));
     }
   }
 
   function setExtraSentences(type: 'phrase' | 'word', index: number, count: number) {
     if (type === 'phrase') {
-      setPhrases((prev) =>
-        prev.map((p, i) => (i === index ? { ...p, extraSentences: count } : p))
-      );
+      setPhrases((prev) => prev.map((p, i) => (i === index ? { ...p, extraSentences: count } : p)));
     } else {
-      setWords((prev) =>
-        prev.map((w, i) => (i === index ? { ...w, extraSentences: count } : w))
-      );
+      setWords((prev) => prev.map((w, i) => (i === index ? { ...w, extraSentences: count } : w)));
     }
   }
 
   async function generateCards() {
-    const selectedItems = [
-      ...phrases.filter((p) => p.selected),
-      ...words.filter((w) => w.selected),
-    ];
+    const selectedItems = [...phrases.filter((p) => p.selected), ...words.filter((w) => w.selected)];
 
-    // Build conjugation cards directly (no API call needed)
     const conjugationCards: CardPreview[] = [];
     if (analysis?.is_verb && analysis.conjugations) {
       const tenses = ['present', 'preterite', 'imperative'] as const;
@@ -168,7 +146,6 @@ export default function AddPage() {
         const items = analysis.conjugations[tense];
         items.forEach((item, index) => {
           if (selectedConjugations.has(`${tense}-${index}`)) {
-            // Create cloze from sentence - escape special regex chars and use lookaround for word boundaries
             const escaped = item.form.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             const cloze = item.sentence.replace(
               new RegExp(`(^|[\\s¿¡])${escaped}([\\s.,!?;:]|$)`, 'gi'),
@@ -189,32 +166,24 @@ export default function AddPage() {
     if (selectedItems.length === 0 && conjugationCards.length === 0) return;
 
     setLoading(true);
-
     let wordCards: CardPreview[] = [];
     if (selectedItems.length > 0) {
       const res = await fetch('/api/generate-cards', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          originalSentence: analysis?.original_sentence,
-          selectedWords: selectedItems,
-        }),
+        body: JSON.stringify({ originalSentence: analysis?.original_sentence, selectedWords: selectedItems }),
       });
-
       const data = await res.json();
       wordCards = data.cards.map((card: Omit<CardPreview, 'enabled'>) => ({ ...card, enabled: true }));
     }
 
-    // Combine conjugation cards and word cards
     setCards([...conjugationCards, ...wordCards]);
     setLoading(false);
     setStep('preview');
   }
 
   function toggleCard(index: number) {
-    setCards((prev) =>
-      prev.map((card, i) => (i === index ? { ...card, enabled: !card.enabled } : card))
-    );
+    setCards((prev) => prev.map((card, i) => (i === index ? { ...card, enabled: !card.enabled } : card)));
   }
 
   async function saveCards() {
@@ -234,7 +203,6 @@ export default function AddPage() {
         }),
       });
     }
-
     setSaved(true);
   }
 
@@ -249,290 +217,190 @@ export default function AddPage() {
     setSaved(false);
   }
 
-  const selectedCount = phrases.filter((p) => p.selected).length + words.filter((w) => w.selected).length + selectedConjugations.size;
+  const selectedCount =
+    phrases.filter((p) => p.selected).length + words.filter((w) => w.selected).length + selectedConjugations.size;
   const enabledCount = cards.filter((c) => c.enabled).length;
 
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-4xl mx-auto p-8">
-        <div className="flex justify-between items-center mb-8">
+        {/* Header */}
+        <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold text-text">Add New Words</h1>
-          <Link href="/" className="text-primary hover:underline">
+          <Link href="/" className="text-primary hover:underline text-sm">
             ← Back to Home
           </Link>
         </div>
 
+        {/* Step Indicator */}
+        <StepIndicator steps={[...steps]} />
+
         {/* Step 1: Input */}
         {step === 'input' && (
-          <form onSubmit={analyzeSentence} className="bg-surface p-6 rounded-lg shadow-card border border-border">
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-text mb-2">Select Deck</label>
-              <select
-                value={selectedDeck}
-                onChange={(e) => setSelectedDeck(e.target.value)}
-                className="w-full px-4 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-text bg-surface"
-              >
-                {decks.map((deck) => (
-                  <option key={deck.id} value={deck.id}>
-                    {deck.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <Card>
+            <CardHeader title="Enter Spanish Text" description="Paste a sentence or word you want to learn" />
+            <CardContent>
+              <form onSubmit={analyzeSentence} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-text mb-2">Select Deck</label>
+                  <select
+                    value={selectedDeck}
+                    onChange={(e) => setSelectedDeck(e.target.value)}
+                    className="w-full px-4 py-2.5 border border-border rounded-lg bg-background text-text focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    {decks.map((deck) => (
+                      <option key={deck.id} value={deck.id}>
+                        {deck.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-text mb-2">
-                Spanish Sentence or Phrase
-              </label>
-              <textarea
-                value={sentence}
-                onChange={(e) => setSentence(e.target.value)}
-                placeholder="Enter a Spanish sentence you heard..."
-                className="w-full px-4 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary h-24 text-text bg-surface placeholder:text-text-placeholder"
-              />
-            </div>
+                <div>
+                  <label className="block text-sm font-medium text-text mb-2">Spanish Sentence or Phrase</label>
+                  <textarea
+                    value={sentence}
+                    onChange={(e) => setSentence(e.target.value)}
+                    placeholder="Enter a Spanish sentence you heard..."
+                    className="w-full px-4 py-3 border border-border rounded-lg bg-background text-text placeholder:text-text-placeholder focus:outline-none focus:ring-2 focus:ring-primary h-28 resize-none"
+                  />
+                </div>
 
-            <button
-              type="submit"
-              disabled={loading || !sentence.trim()}
-              className="w-full py-3 bg-primary text-white rounded-lg font-semibold hover:bg-primary-hover transition disabled:opacity-50"
-            >
-              {loading ? 'Analyzing...' : 'Analyze Sentence'}
-            </button>
-          </form>
+                <button
+                  type="submit"
+                  disabled={loading || !sentence.trim()}
+                  className="w-full py-3 bg-primary text-white rounded-lg font-semibold hover:bg-primary-hover transition disabled:opacity-50"
+                >
+                  {loading ? 'Analyzing...' : 'Analyze Sentence'}
+                </button>
+              </form>
+            </CardContent>
+          </Card>
         )}
 
         {/* Step 2: Select Words */}
         {step === 'select' && analysis && (
           <div className="space-y-6">
-            {/* Original sentence/word */}
-            <div className="bg-surface p-6 rounded-lg shadow-card border border-border">
-              <div className="text-lg font-medium text-text">{analysis.original_sentence}</div>
-              <div className="text-text-secondary mt-1">{analysis.translation}</div>
-              {analysis.is_verb && analysis.infinitive && (
-                <div className="text-sm text-primary mt-2">Verb: {analysis.infinitive}</div>
-              )}
-            </div>
+            {/* Original sentence */}
+            <Card>
+              <CardContent>
+                <div className="text-lg font-medium text-text">{analysis.original_sentence}</div>
+                <div className="text-text-secondary mt-1">{analysis.translation}</div>
+                {analysis.is_verb && analysis.infinitive && (
+                  <span className="inline-block mt-2 px-2 py-1 text-xs font-medium bg-primary/10 text-primary rounded">
+                    Verb: {analysis.infinitive}
+                  </span>
+                )}
+              </CardContent>
+            </Card>
 
-            {/* Conjugations (for verbs) */}
+            {/* Conjugations */}
             {analysis.is_verb && analysis.conjugations && (
-              <div className="bg-surface p-6 rounded-lg shadow-card border border-border">
-                <h2 className="text-lg font-semibold text-text mb-4">Conjugations with Examples</h2>
-                <p className="text-sm text-text-muted mb-4">Click to select sentences for flashcards</p>
-                <div className="space-y-6">
-                  {/* Present */}
-                  <div>
-                    <h3 className="font-medium text-primary mb-3">Present Tense</h3>
-                    <div className="space-y-2">
-                      {analysis.conjugations.present.map((item, i) => (
-                        <div
-                          key={i}
-                          onClick={() => toggleConjugation('present', i)}
-                          className={`p-3 rounded-lg border-2 cursor-pointer transition ${
-                            selectedConjugations.has(`present-${i}`)
-                              ? 'border-primary bg-primary/10'
-                              : 'border-border bg-background hover:border-text-muted'
-                          }`}
-                        >
-                          <div className="flex gap-3 items-start">
-                            <input
-                              type="checkbox"
-                              checked={selectedConjugations.has(`present-${i}`)}
-                              onChange={() => toggleConjugation('present', i)}
-                              className="mt-1 w-4 h-4 accent-primary"
-                            />
-                            <div className="flex-1">
-                              <div className="flex gap-2 items-baseline">
-                                <span className="text-text-muted text-sm w-24">{item.pronoun}</span>
-                                <span className="text-primary font-medium">{item.form}</span>
-                              </div>
-                              <div className="mt-1 text-sm">
-                                <span className="text-text">{item.sentence}</span>
-                                <span className="text-text-muted ml-2">({item.sentence_english})</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  {/* Preterite */}
-                  <div>
-                    <h3 className="font-medium text-secondary mb-3">Past Tense (Preterite)</h3>
-                    <div className="space-y-2">
-                      {analysis.conjugations.preterite.map((item, i) => (
-                        <div
-                          key={i}
-                          onClick={() => toggleConjugation('preterite', i)}
-                          className={`p-3 rounded-lg border-2 cursor-pointer transition ${
-                            selectedConjugations.has(`preterite-${i}`)
-                              ? 'border-secondary bg-secondary/10'
-                              : 'border-border bg-background hover:border-text-muted'
-                          }`}
-                        >
-                          <div className="flex gap-3 items-start">
-                            <input
-                              type="checkbox"
-                              checked={selectedConjugations.has(`preterite-${i}`)}
-                              onChange={() => toggleConjugation('preterite', i)}
-                              className="mt-1 w-4 h-4 accent-secondary"
-                            />
-                            <div className="flex-1">
-                              <div className="flex gap-2 items-baseline">
-                                <span className="text-text-muted text-sm w-24">{item.pronoun}</span>
-                                <span className="text-secondary font-medium">{item.form}</span>
-                              </div>
-                              <div className="mt-1 text-sm">
-                                <span className="text-text">{item.sentence}</span>
-                                <span className="text-text-muted ml-2">({item.sentence_english})</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  {/* Imperative */}
-                  <div>
-                    <h3 className="font-medium text-accent mb-3">Commands (Imperative)</h3>
-                    <div className="space-y-2">
-                      {analysis.conjugations.imperative.map((item, i) => (
-                        <div
-                          key={i}
-                          onClick={() => toggleConjugation('imperative', i)}
-                          className={`p-3 rounded-lg border-2 cursor-pointer transition ${
-                            selectedConjugations.has(`imperative-${i}`)
-                              ? 'border-accent bg-accent/10'
-                              : 'border-border bg-background hover:border-text-muted'
-                          }`}
-                        >
-                          <div className="flex gap-3 items-start">
-                            <input
-                              type="checkbox"
-                              checked={selectedConjugations.has(`imperative-${i}`)}
-                              onChange={() => toggleConjugation('imperative', i)}
-                              className="mt-1 w-4 h-4 accent-accent"
-                            />
-                            <div className="flex-1">
-                              <div className="flex gap-2 items-baseline">
-                                <span className="text-text-muted text-sm w-24">{item.pronoun}</span>
-                                <span className="text-accent font-medium">{item.form}</span>
-                              </div>
-                              <div className="mt-1 text-sm">
-                                <span className="text-text">{item.sentence}</span>
-                                <span className="text-text-muted ml-2">({item.sentence_english})</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <Card>
+                <CardHeader
+                  title="Conjugations"
+                  description="Select conjugations to create flashcards"
+                />
+                <CardContent className="space-y-6">
+                  <ConjugationSection
+                    title="Present Tense"
+                    tense="present"
+                    items={analysis.conjugations.present}
+                    selectedKeys={selectedConjugations}
+                    onToggle={toggleConjugation}
+                    variant="primary"
+                  />
+                  <ConjugationSection
+                    title="Past Tense (Preterite)"
+                    tense="preterite"
+                    items={analysis.conjugations.preterite}
+                    selectedKeys={selectedConjugations}
+                    onToggle={toggleConjugation}
+                    variant="secondary"
+                  />
+                  <ConjugationSection
+                    title="Commands (Imperative)"
+                    tense="imperative"
+                    items={analysis.conjugations.imperative}
+                    selectedKeys={selectedConjugations}
+                    onToggle={toggleConjugation}
+                    variant="accent"
+                  />
+                </CardContent>
+              </Card>
             )}
 
             {/* Phrases */}
             {phrases.length > 0 && (
-              <div className="bg-surface p-6 rounded-lg shadow-card border border-border">
-                <h2 className="text-lg font-semibold text-text mb-4">Phrases & Idioms</h2>
-                <div className="space-y-3">
+              <Card>
+                <CardHeader title="Phrases & Idioms" description="Select phrases to create flashcards" />
+                <CardContent className="space-y-3">
                   {phrases.map((phrase, i) => (
-                    <div
+                    <SelectableCard
                       key={i}
-                      className={`p-4 rounded-lg border-2 cursor-pointer transition ${
-                        phrase.selected
-                          ? 'border-primary bg-primary/10'
-                          : 'border-border hover:border-text-muted'
-                      }`}
+                      selected={phrase.selected}
                       onClick={() => toggleItem('phrase', i)}
-                    >
-                      <div className="flex justify-between items-start">
-                        <div className="flex items-center gap-3">
-                          <input
-                            type="checkbox"
-                            checked={phrase.selected}
-                            onChange={() => toggleItem('phrase', i)}
-                            className="w-5 h-5 accent-primary"
-                          />
-                          <div>
-                            <span className="font-medium text-primary">{phrase.spanish}</span>
-                            <span className="text-text-secondary ml-2">= {phrase.english}</span>
-                          </div>
-                        </div>
-                        {phrase.selected && (
+                      title={
+                        <span>
+                          <span className="text-primary">{phrase.spanish}</span>
+                          <span className="text-text-secondary ml-2">= {phrase.english}</span>
+                        </span>
+                      }
+                      rightContent={
+                        phrase.selected && (
                           <select
                             value={phrase.extraSentences}
-                            onChange={(e) => {
-                              e.stopPropagation();
-                              setExtraSentences('phrase', i, Number(e.target.value));
-                            }}
-                            onClick={(e) => e.stopPropagation()}
-                            className="px-2 py-1 border border-border rounded text-sm bg-surface text-text"
+                            onChange={(e) => setExtraSentences('phrase', i, Number(e.target.value))}
+                            className="px-2 py-1 border border-border rounded text-sm bg-background text-text"
                           >
-                            <option value={0}>1 card (original only)</option>
-                            <option value={1}>2 cards (+1 example)</option>
-                            <option value={2}>3 cards (+2 examples)</option>
+                            <option value={0}>1 card</option>
+                            <option value={1}>2 cards</option>
+                            <option value={2}>3 cards</option>
                           </select>
-                        )}
-                      </div>
-                    </div>
+                        )
+                      }
+                    />
                   ))}
-                </div>
-              </div>
+                </CardContent>
+              </Card>
             )}
 
             {/* Words */}
             {words.length > 0 && (
-              <div className="bg-surface p-6 rounded-lg shadow-card border border-border">
-                <h2 className="text-lg font-semibold text-text mb-4">Individual Words</h2>
-                <div className="space-y-3">
+              <Card>
+                <CardHeader title="Individual Words" description="Select words to create flashcards" />
+                <CardContent className="space-y-3">
                   {words.map((word, i) => (
-                    <div
+                    <SelectableCard
                       key={i}
-                      className={`p-4 rounded-lg border-2 cursor-pointer transition ${
-                        word.selected
-                          ? 'border-primary bg-primary/10'
-                          : 'border-border hover:border-text-muted'
-                      }`}
+                      selected={word.selected}
                       onClick={() => toggleItem('word', i)}
-                    >
-                      <div className="flex justify-between items-start">
-                        <div className="flex items-center gap-3">
-                          <input
-                            type="checkbox"
-                            checked={word.selected}
-                            onChange={() => toggleItem('word', i)}
-                            className="w-5 h-5 accent-primary"
-                          />
-                          <div>
-                            <span className="font-medium text-primary">{word.spanish}</span>
-                            <span className="text-text-secondary ml-2">= {word.english}</span>
-                            {word.base_form && word.base_form !== word.spanish && (
-                              <span className="text-text-muted ml-2 text-sm">({word.base_form})</span>
-                            )}
-                          </div>
-                        </div>
-                        {word.selected && (
+                      title={
+                        <span>
+                          <span className="text-primary">{word.spanish}</span>
+                          <span className="text-text-secondary ml-2">= {word.english}</span>
+                          {word.base_form && word.base_form !== word.spanish && (
+                            <span className="text-text-muted ml-2 text-sm">({word.base_form})</span>
+                          )}
+                        </span>
+                      }
+                      rightContent={
+                        word.selected && (
                           <select
                             value={word.extraSentences}
-                            onChange={(e) => {
-                              e.stopPropagation();
-                              setExtraSentences('word', i, Number(e.target.value));
-                            }}
-                            onClick={(e) => e.stopPropagation()}
-                            className="px-2 py-1 border border-border rounded text-sm bg-surface text-text"
+                            onChange={(e) => setExtraSentences('word', i, Number(e.target.value))}
+                            className="px-2 py-1 border border-border rounded text-sm bg-background text-text"
                           >
-                            <option value={0}>1 card (original only)</option>
-                            <option value={1}>2 cards (+1 example)</option>
-                            <option value={2}>3 cards (+2 examples)</option>
+                            <option value={0}>1 card</option>
+                            <option value={1}>2 cards</option>
+                            <option value={2}>3 cards</option>
                           </select>
-                        )}
-                      </div>
-                    </div>
+                        )
+                      }
+                    />
                   ))}
-                </div>
-              </div>
+                </CardContent>
+              </Card>
             )}
 
             {/* Actions */}
@@ -546,9 +414,9 @@ export default function AddPage() {
               <button
                 onClick={generateCards}
                 disabled={loading || selectedCount === 0}
-                className="flex-1 py-3 bg-secondary text-white rounded-lg font-semibold hover:bg-secondary-hover transition disabled:opacity-50"
+                className="flex-1 py-3 bg-primary text-white rounded-lg font-semibold hover:bg-primary-hover transition disabled:opacity-50"
               >
-                {loading ? 'Generating...' : `Create Cards for ${selectedCount} item${selectedCount !== 1 ? 's' : ''}`}
+                {loading ? 'Generating...' : `Create ${selectedCount} Card${selectedCount !== 1 ? 's' : ''}`}
               </button>
             </div>
           </div>
@@ -557,54 +425,39 @@ export default function AddPage() {
         {/* Step 3: Preview & Save */}
         {step === 'preview' && (
           <div className="space-y-6">
-            <div className="bg-surface p-6 rounded-lg shadow-card border border-border">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-semibold text-text">
-                  Cards to Create ({enabledCount} of {cards.length})
-                </h2>
-                <span className="text-sm text-text-muted">Click to toggle</span>
-              </div>
-
-              <div className="space-y-3 mb-6">
+            <Card>
+              <CardHeader
+                title={`Review Cards (${enabledCount} of ${cards.length})`}
+                description="Toggle cards to include or exclude them"
+              />
+              <CardContent className="space-y-3">
                 {cards.map((card, i) => (
-                  <div
+                  <SelectableCard
                     key={i}
+                    selected={card.enabled}
                     onClick={() => toggleCard(i)}
-                    className={`p-4 rounded-lg border-2 cursor-pointer transition ${
-                      card.enabled
-                        ? 'border-primary bg-primary/10'
-                        : 'border-border opacity-50'
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <input
-                        type="checkbox"
-                        checked={card.enabled}
-                        onChange={() => toggleCard(i)}
-                        className="w-5 h-5 mt-0.5 accent-primary"
-                      />
-                      <div className="flex-1">
-                        <div className="font-medium text-primary">
-                          {card.spanish_word} = {card.translation}
-                        </div>
-                        <div className="text-sm text-text-secondary mt-1">
-                          {card.cloze_sentence}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                    title={
+                      <span>
+                        <span className="text-primary">{card.spanish_word}</span>
+                        <span className="text-text-secondary ml-2">= {card.translation}</span>
+                      </span>
+                    }
+                    description={card.cloze_sentence}
+                  />
                 ))}
-              </div>
+              </CardContent>
 
               {saved ? (
-                <div className="p-4 bg-success-light text-success rounded-lg text-center">
-                  Saved {enabledCount} cards!
-                  <button onClick={reset} className="ml-4 underline">
-                    Add more
-                  </button>
+                <div className="px-6 py-4 border-t border-border bg-success/10">
+                  <div className="flex items-center justify-between">
+                    <span className="text-success font-medium">Saved {enabledCount} cards!</span>
+                    <button onClick={reset} className="text-primary hover:underline">
+                      Add more words
+                    </button>
+                  </div>
                 </div>
               ) : (
-                <div className="flex gap-4">
+                <div className="px-6 py-4 border-t border-border flex gap-4">
                   <button
                     onClick={() => setStep('select')}
                     className="flex-1 py-3 bg-surface border border-border text-text rounded-lg font-semibold hover:bg-background transition"
@@ -614,13 +467,13 @@ export default function AddPage() {
                   <button
                     onClick={saveCards}
                     disabled={enabledCount === 0}
-                    className="flex-1 py-3 bg-secondary text-white rounded-lg font-semibold hover:bg-secondary-hover transition disabled:opacity-50"
+                    className="flex-1 py-3 bg-primary text-white rounded-lg font-semibold hover:bg-primary-hover transition disabled:opacity-50"
                   >
                     Save {enabledCount} Card{enabledCount !== 1 ? 's' : ''} to Deck
                   </button>
                 </div>
               )}
-            </div>
+            </Card>
           </div>
         )}
       </div>
