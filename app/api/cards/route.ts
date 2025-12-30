@@ -1,13 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAllCards, getCardsByDeck, getDueCards, createCard, deleteCard, updateCard } from '@/lib/db';
+import { getAllCards, getCardsByDeck, getDueCards, getStudyAheadCards, createCard, deleteCard, updateCard } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const deckId = searchParams.get('deckId');
   const due = searchParams.get('due');
+  const studyAhead = searchParams.get('studyAhead');
+  const limit = searchParams.get('limit');
 
   if (due === 'true') {
     const cards = getDueCards(deckId || undefined);
+    return NextResponse.json(cards);
+  }
+
+  if (studyAhead === 'true') {
+    const cards = getStudyAheadCards(deckId || undefined, limit ? parseInt(limit) : 20);
     return NextResponse.json(cards);
   }
 

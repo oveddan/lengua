@@ -26,6 +26,7 @@ interface Stats {
 export default function Home() {
   const [decks, setDecks] = useState<Deck[]>([]);
   const [stats, setStats] = useState<Stats>({ totalCards: 0, dueCards: 0, totalDecks: 0 });
+  const [studyAheadCount, setStudyAheadCount] = useState(0);
   const [newDeckName, setNewDeckName] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -38,6 +39,14 @@ export default function Home() {
     const data = await res.json();
     setDecks(data.decks);
     setStats(data.stats);
+
+    // If no due cards, check how many are available for study ahead
+    if (data.stats.dueCards === 0) {
+      const aheadRes = await fetch('/api/cards?studyAhead=true');
+      const aheadData = await aheadRes.json();
+      setStudyAheadCount(aheadData.length);
+    }
+
     setLoading(false);
   }
 
@@ -93,6 +102,13 @@ export default function Home() {
               label: `Review (${stats.dueCards})`,
               variant: 'primary',
               show: stats.dueCards > 0,
+            },
+            {
+              href: '/review?studyAhead=true',
+              icon: <ReviewIcon />,
+              label: `Study Ahead (${studyAheadCount})`,
+              variant: 'secondary',
+              show: stats.dueCards === 0 && studyAheadCount > 0,
             },
             { href: '/chat', icon: <ChatIcon />, label: 'Chat Assistant', variant: 'secondary' },
             { href: '/add', icon: <AddIcon />, label: 'Add Words', variant: 'accent' },

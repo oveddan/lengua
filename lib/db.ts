@@ -8,7 +8,7 @@ const db = new Database(dbPath);
 // Enable foreign keys
 db.pragma('foreign_keys = ON');
 
-// Initialize schema
+// Initialize schema - base tables without new columns
 db.exec(`
   CREATE TABLE IF NOT EXISTS decks (
     id TEXT PRIMARY KEY,
@@ -23,7 +23,7 @@ db.exec(`
     translation TEXT NOT NULL,
     context_sentence TEXT,
     cloze_sentence TEXT,
-    interval INTEGER DEFAULT 1,
+    interval INTEGER DEFAULT 0,
     ease_factor REAL DEFAULT 2.5,
     next_review TEXT DEFAULT (datetime('now')),
     review_count INTEGER DEFAULT 0,
@@ -32,6 +32,35 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_cards_next_review ON cards(next_review);
   CREATE INDEX IF NOT EXISTS idx_cards_deck_id ON cards(deck_id);
+`);
+
+// Migration: Add new columns if they don't exist (for existing databases)
+const columns = db.prepare("PRAGMA table_info(cards)").all() as { name: string }[];
+const columnNames = columns.map(c => c.name);
+
+if (!columnNames.includes('queue')) {
+  db.exec(`ALTER TABLE cards ADD COLUMN queue INTEGER DEFAULT 0`);
+  db.exec(`ALTER TABLE cards ADD COLUMN learning_step INTEGER DEFAULT 0`);
+  db.exec(`ALTER TABLE cards ADD COLUMN lapses INTEGER DEFAULT 0`);
+  // Migrate existing cards: cards with review_count > 0 are graduated (queue=2)
+  db.exec(`UPDATE cards SET queue = 2 WHERE review_count > 0`);
+}
+
+// Create index on queue (after migration ensures column exists)
+db.exec(`CREATE INDEX IF NOT EXISTS idx_cards_queue ON cards(queue)`);
+
+db.exec(`
+  -- Review sessions for spaced repetition
+  CREATE TABLE IF NOT EXISTS review_sessions (
+    id TEXT PRIMARY KEY,
+    deck_id TEXT REFERENCES decks(id) ON DELETE CASCADE,
+    card_order TEXT NOT NULL,
+    current_index INTEGER DEFAULT 0,
+    study_ahead INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_review_sessions_deck ON review_sessions(deck_id);
 
   -- Chat sessions for WhatsApp conversation helper
   CREATE TABLE IF NOT EXISTS chat_sessions (
@@ -62,6 +91,16 @@ export interface Deck {
   created_at: string;
 }
 
+// Queue states (matches Anki)
+export const CardQueue = {
+  New: 0,        // Never reviewed
+  Learning: 1,   // In learning phase (sub-day steps)
+  Review: 2,     // Graduated, spaced repetition
+  Relearning: 3, // Lapsed, going through relearning steps
+} as const;
+
+export type CardQueueType = typeof CardQueue[keyof typeof CardQueue];
+
 export interface Card {
   id: string;
   deck_id: string;
@@ -73,6 +112,18 @@ export interface Card {
   ease_factor: number;
   next_review: string;
   review_count: number;
+  queue: CardQueueType;
+  learning_step: number;
+  lapses: number;
+  created_at: string;
+}
+
+export interface ReviewSession {
+  id: string;
+  deck_id: string | null;
+  card_order: string;  // JSON array of card IDs
+  current_index: number;
+  study_ahead: number;  // 0 = normal, 1 = study ahead mode
   created_at: string;
 }
 
@@ -117,7 +168,7 @@ export function deleteDeck(id: string): void {
 }
 
 // Card operations
-export function createCard(card: Omit<Card, 'id' | 'interval' | 'ease_factor' | 'next_review' | 'review_count' | 'created_at'>): Card {
+export function createCard(card: Omit<Card, 'id' | 'interval' | 'ease_factor' | 'next_review' | 'review_count' | 'queue' | 'learning_step' | 'lapses' | 'created_at'>): Card {
   const id = uuidv4();
   const stmt = db.prepare(`
     INSERT INTO cards (id, deck_id, spanish_word, translation, context_sentence, cloze_sentence)
@@ -144,12 +195,75 @@ export function getAllCards(): Card[] {
 
 export function getDueCards(deckId?: string): Card[] {
   const now = new Date().toISOString();
+  // Get cards that are due: new cards (queue=0), review cards due (queue=2),
+  // and learning/relearning cards due (queue=1,3)
   if (deckId) {
-    const stmt = db.prepare('SELECT * FROM cards WHERE deck_id = ? AND next_review <= ? ORDER BY next_review ASC');
+    const stmt = db.prepare(`
+      SELECT * FROM cards
+      WHERE deck_id = ? AND next_review <= ?
+      ORDER BY
+        CASE queue
+          WHEN 1 THEN 0  -- Learning cards first
+          WHEN 3 THEN 1  -- Then relearning
+          WHEN 0 THEN 2  -- Then new
+          ELSE 3         -- Then review
+        END,
+        next_review ASC
+    `);
     return stmt.all(deckId, now) as Card[];
   }
-  const stmt = db.prepare('SELECT * FROM cards WHERE next_review <= ? ORDER BY next_review ASC');
+  const stmt = db.prepare(`
+    SELECT * FROM cards
+    WHERE next_review <= ?
+    ORDER BY
+      CASE queue
+        WHEN 1 THEN 0  -- Learning cards first
+        WHEN 3 THEN 1  -- Then relearning
+        WHEN 0 THEN 2  -- Then new
+        ELSE 3         -- Then review
+      END,
+      next_review ASC
+  `);
   return stmt.all(now) as Card[];
+}
+
+// Get cards for "study ahead" - not due yet, ordered by closest to due
+export function getStudyAheadCards(deckId?: string, limit: number = 20): Card[] {
+  const now = new Date().toISOString();
+  if (deckId) {
+    const stmt = db.prepare(`
+      SELECT * FROM cards
+      WHERE deck_id = ? AND queue = 2 AND next_review > ?
+      ORDER BY next_review ASC
+      LIMIT ?
+    `);
+    return stmt.all(deckId, now, limit) as Card[];
+  }
+  const stmt = db.prepare(`
+    SELECT * FROM cards
+    WHERE queue = 2 AND next_review > ?
+    ORDER BY next_review ASC
+    LIMIT ?
+  `);
+  return stmt.all(now, limit) as Card[];
+}
+
+// Get all learning/relearning cards (for in-session review)
+export function getLearningCards(deckId?: string): Card[] {
+  if (deckId) {
+    const stmt = db.prepare(`
+      SELECT * FROM cards
+      WHERE deck_id = ? AND queue IN (1, 3)
+      ORDER BY next_review ASC
+    `);
+    return stmt.all(deckId) as Card[];
+  }
+  const stmt = db.prepare(`
+    SELECT * FROM cards
+    WHERE queue IN (1, 3)
+    ORDER BY next_review ASC
+  `);
+  return stmt.all() as Card[];
 }
 
 export function updateCard(id: string, updates: Partial<Card>): Card | null {
@@ -171,6 +285,45 @@ export function updateCard(id: string, updates: Partial<Card>): Card | null {
 export function deleteCard(id: string): void {
   const stmt = db.prepare('DELETE FROM cards WHERE id = ?');
   stmt.run(id);
+}
+
+// Review session operations
+export function createReviewSession(
+  cardIds: string[],
+  deckId?: string,
+  studyAhead: boolean = false
+): ReviewSession {
+  const id = uuidv4();
+  const stmt = db.prepare(`
+    INSERT INTO review_sessions (id, deck_id, card_order, study_ahead)
+    VALUES (?, ?, ?, ?)
+  `);
+  stmt.run(id, deckId || null, JSON.stringify(cardIds), studyAhead ? 1 : 0);
+  return getReviewSession(id)!;
+}
+
+export function getReviewSession(id: string): ReviewSession | null {
+  const stmt = db.prepare('SELECT * FROM review_sessions WHERE id = ?');
+  return stmt.get(id) as ReviewSession | null;
+}
+
+export function updateReviewSessionIndex(id: string, index: number): void {
+  const stmt = db.prepare('UPDATE review_sessions SET current_index = ? WHERE id = ?');
+  stmt.run(index, id);
+}
+
+export function deleteReviewSession(id: string): void {
+  const stmt = db.prepare('DELETE FROM review_sessions WHERE id = ?');
+  stmt.run(id);
+}
+
+// Clean up old review sessions (older than 24 hours)
+export function cleanupOldReviewSessions(): void {
+  const stmt = db.prepare(`
+    DELETE FROM review_sessions
+    WHERE created_at < datetime('now', '-1 day')
+  `);
+  stmt.run();
 }
 
 // Stats
