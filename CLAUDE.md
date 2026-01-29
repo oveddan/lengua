@@ -39,19 +39,86 @@ pnpm test:translate hola                      # Test single word translation
 pnpm test:db                                  # Test database operations
 ```
 
-**Note:** After cloning, run `cd node_modules/better-sqlite3 && npm run build-release` to compile the native SQLite bindings.
-
 ## Architecture
 
 ### Tech Stack
 - Next.js 16 (App Router) + TypeScript
-- SQLite via better-sqlite3 (stored at `data/spanish.db`)
+- PostgreSQL via Neon serverless (`@neondatabase/serverless`)
 - Claude API (claude-sonnet-4-20250514) for AI translations
 - Tailwind CSS v4 with dark mode support
 
+### Database Setup (Neon)
+
+Project: `Dan Spanish Anki` (ID: `autumn-waterfall-21379745`)
+
+Tables in `public` schema:
+- `decks` - Deck collections
+- `cards` - Flashcards with SM-2 scheduling fields
+- `review_sessions` - Active review session state
+- `chat_sessions` - Chat conversation sessions
+- `chat_exchanges` - Individual chat messages
+
+To recreate schema (run via Neon MCP or SQL client):
+```sql
+CREATE TABLE IF NOT EXISTS decks (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS cards (
+  id TEXT PRIMARY KEY,
+  deck_id TEXT REFERENCES decks(id) ON DELETE CASCADE,
+  spanish_word TEXT NOT NULL,
+  translation TEXT NOT NULL,
+  context_sentence TEXT,
+  cloze_sentence TEXT,
+  interval INTEGER DEFAULT 0,
+  ease_factor REAL DEFAULT 2.5,
+  next_review TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  review_count INTEGER DEFAULT 0,
+  queue INTEGER DEFAULT 0,
+  learning_step INTEGER DEFAULT 0,
+  lapses INTEGER DEFAULT 0,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS review_sessions (
+  id TEXT PRIMARY KEY,
+  deck_id TEXT REFERENCES decks(id) ON DELETE CASCADE,
+  card_order TEXT NOT NULL,
+  current_index INTEGER DEFAULT 0,
+  study_ahead INTEGER DEFAULT 0,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS chat_sessions (
+  id TEXT PRIMARY KEY,
+  name TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS chat_exchanges (
+  id TEXT PRIMARY KEY,
+  session_id TEXT REFERENCES chat_sessions(id) ON DELETE CASCADE,
+  input TEXT NOT NULL,
+  intent TEXT NOT NULL,
+  response_main TEXT NOT NULL,
+  response_json TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_cards_next_review ON cards(next_review);
+CREATE INDEX IF NOT EXISTS idx_cards_deck_id ON cards(deck_id);
+CREATE INDEX IF NOT EXISTS idx_cards_queue ON cards(queue);
+CREATE INDEX IF NOT EXISTS idx_review_sessions_deck ON review_sessions(deck_id);
+CREATE INDEX IF NOT EXISTS idx_chat_exchanges_session ON chat_exchanges(session_id);
+```
+
 ### Core Libraries (`lib/`)
 
-- **db.ts**: SQLite database layer. Exports `Card` and `Deck` types plus CRUD functions. Database auto-initializes on first import.
+- **db.ts**: Neon Postgres database layer. Exports `Card` and `Deck` types plus async CRUD functions.
 - **sm2.ts**: SM-2 spaced repetition algorithm. Use `reviewCard(card, 'again'|'hard'|'good'|'easy')` to calculate next review date.
 - **claude.ts**: `translateWord(spanishWord)` returns translation + context sentence + cloze format via Claude API.
 - **anki-export.ts**: `exportToAnki({ deckId?, format, includeContext })` generates Anki-importable text files.
@@ -108,6 +175,9 @@ The review page has fallback logic to create cloze on-the-fly for cards without 
 
 ```
 ANTHROPIC_API_KEY=sk-ant-...
+
+# Database (Neon Postgres)
+DATABASE_URL=postgresql://user:pass@ep-xxx.us-east-1.aws.neon.tech/neondb?sslmode=require
 
 # Authentication (required for deployment)
 AUTH_USERNAME=your_username

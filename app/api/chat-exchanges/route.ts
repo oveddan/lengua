@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'sessionId is required' }, { status: 400 });
   }
 
-  const exchanges = getChatExchangesBySession(sessionId);
+  const exchanges = await getChatExchangesBySession(sessionId);
   return NextResponse.json({ exchanges });
 }
 
@@ -21,6 +21,6 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'ID is required' }, { status: 400 });
   }
 
-  deleteChatExchange(id);
+  await deleteChatExchange(id);
   return NextResponse.json({ success: true });
 }

@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const card = getCard(cardId);
+  const card = await getCard(cardId);
   if (!card) {
     return NextResponse.json({ error: 'Card not found' }, { status: 404 });
   }
@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
   // Use the new Anki scheduler
   const result = scheduleCard(card, quality as AnswerButton, DEFAULT_CONFIG);
 
-  const updatedCard = updateCard(cardId, {
+  const updatedCard = await updateCard(cardId, {
     queue: result.queue,
     learning_step: result.learning_step,
     interval: result.interval,
@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const card = getCard(cardId);
+  const card = await getCard(cardId);
   if (!card) {
     return NextResponse.json({ error: 'Card not found' }, { status: 404 });
   }
