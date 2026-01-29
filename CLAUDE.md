@@ -15,6 +15,7 @@ Spanish flashcard app for vocabulary learning with spaced repetition (SM-2 algor
 6. **Deck Organization**: Group cards into decks, filter reviews by deck
 7. **Export**: Download deck as Anki-importable file
 8. **Chat Assistant**: WhatsApp conversation helper with natural language input, session persistence, and card creation flow
+9. **Authentication**: Simple hardcoded username/password authentication via environment variables
 
 ## Commands
 
@@ -76,6 +77,8 @@ ChatExchange: id, session_id, input, intent, response_main, response_json, creat
 - `POST /api/chat-assist` - Smart assistant with intent detection (english_to_spanish, spanish_to_english, lookup, validation)
 - `GET/POST/PATCH/DELETE /api/chat-sessions` - Chat session CRUD
 - `GET/DELETE /api/chat-exchanges` - Chat exchange listing and deletion
+- `POST /api/auth/login` - Authenticate with username/password
+- `GET/POST /api/auth/logout` - Clear auth session
 
 ### UI Pages (`app/`)
 
@@ -85,6 +88,7 @@ ChatExchange: id, session_id, input, intent, response_main, response_json, creat
 - **Deck (`/deck/[id]`)**: Browse cards in a deck, delete individual cards
 - **Export (`/export`)**: Select deck, download Anki file
 - **Chat (`/chat`)**: WhatsApp conversation assistant - natural language input ("How do you say...", paste Spanish, "Is this correct:"), session management, conversation context, "Make Cards" links to /add flow
+- **Login (`/login`)**: Authentication page with username/password form
 
 ### Cloze Generation
 
@@ -104,4 +108,9 @@ The review page has fallback logic to create cloze on-the-fly for cards without 
 
 ```
 ANTHROPIC_API_KEY=sk-ant-...
+
+# Authentication (required for deployment)
+AUTH_USERNAME=your_username
+AUTH_PASSWORD=your_password
+AUTH_SECRET=random_32_char_secret_for_signing
 ```

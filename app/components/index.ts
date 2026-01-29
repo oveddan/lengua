@@ -9,3 +9,5 @@ export { Card, CardHeader, CardContent, CardFooter } from './Card';
 export { InlineCardSelector } from './InlineCardSelector';
 export type { InlineCardState, WordItem, AnalysisResult, CardPreview, VerbConjugations, ConjugationItem } from './InlineCardSelector';
 export * from './icons';
+export { Header } from './Header';
+export { LogoutButton } from './LogoutButton';
