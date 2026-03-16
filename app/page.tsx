@@ -9,6 +9,7 @@ import {
   ChatIcon,
   AddIcon,
   ExportIcon,
+  ImportIcon,
 } from './components';
 
 interface Deck {
@@ -113,6 +114,7 @@ export default function Home() {
             { href: '/chat', icon: <ChatIcon />, label: 'Chat Assistant', variant: 'secondary' },
             { href: '/add', icon: <AddIcon />, label: 'Add Words', variant: 'accent' },
             { href: '/export', icon: <ExportIcon />, label: 'Export to Anki', variant: 'outline' },
+            { href: '/import', icon: <ImportIcon />, label: 'Import', variant: 'outline' },
           ]}
         />
 
