@@ -104,4 +104,13 @@ The review page has fallback logic to create cloze on-the-fly for cards without 
 
 ```
 ANTHROPIC_API_KEY=sk-ant-...
+DATABASE_URL=postgres://...       # Neon Postgres connection string
+```
+
+### Worktree Setup
+
+Git worktrees don't share `.env.local` with the main repo. **You must symlink env vars immediately after creating a worktree**, otherwise `pnpm build` and `pnpm dev` will fail with "No database connection string" errors:
+
+```bash
+ln -s /Users/danoved/Source/spanish-anki/.env.local <worktree-path>/.env.local
 ```
