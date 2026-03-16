@@ -3,3 +3,4 @@ export { ChatIcon } from './ChatIcon';
 export { AddIcon } from './AddIcon';
 export { ExportIcon } from './ExportIcon';
 export { DeckIcon } from './DeckIcon';
+export { ImportIcon } from './ImportIcon';
