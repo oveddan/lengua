@@ -21,7 +21,7 @@ interface CardHeaderProps {
 
 export function CardHeader({ title, description, action }: CardHeaderProps) {
   return (
-    <div className="px-6 py-4 border-b border-border flex justify-between items-start">
+    <div className="px-4 py-3 sm:px-6 sm:py-4 border-b border-border flex justify-between items-start">
       <div>
         <h2 className="text-lg font-semibold text-text">{title}</h2>
         {description && <p className="text-sm text-text-muted mt-1">{description}</p>}
@@ -37,7 +37,7 @@ interface CardContentProps {
 }
 
 export function CardContent({ children, className = '' }: CardContentProps) {
-  return <div className={`p-6 ${className}`}>{children}</div>;
+  return <div className={`p-4 sm:p-6 ${className}`}>{children}</div>;
 }
 
 interface CardFooterProps {
@@ -47,7 +47,7 @@ interface CardFooterProps {
 
 export function CardFooter({ children, className = '' }: CardFooterProps) {
   return (
-    <div className={`px-6 py-4 border-t border-border bg-background/50 rounded-b-xl ${className}`}>
+    <div className={`px-4 py-3 sm:px-6 sm:py-4 border-t border-border bg-background/50 rounded-b-xl ${className}`}>
       {children}
     </div>
   );

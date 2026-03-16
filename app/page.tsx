@@ -73,12 +73,12 @@ export default function Home() {
   }
 
   if (loading) {
-    return <div className="min-h-screen bg-background p-8 text-center text-text">Loading...</div>;
+    return <div className="min-h-screen bg-background p-4 sm:p-8 text-center text-text">Loading...</div>;
   }
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="max-w-4xl mx-auto p-8">
+      <div className="max-w-4xl mx-auto p-4 sm:p-8">
         <h1 className="text-3xl font-bold text-text mb-2">Spanish Flashcards</h1>
         <p className="text-text-secondary mb-8">Learn Spanish with spaced repetition</p>
 
@@ -97,6 +97,7 @@ export default function Home() {
 
         <QuickActions
           actions={[
+            { href: '/chat', icon: <ChatIcon />, label: 'Chat Assistant', variant: 'secondary' },
             {
               href: '/review',
               icon: <ReviewIcon />,
@@ -111,7 +112,6 @@ export default function Home() {
               variant: 'secondary',
               show: stats.dueCards === 0 && studyAheadCount > 0,
             },
-            { href: '/chat', icon: <ChatIcon />, label: 'Chat Assistant', variant: 'secondary' },
             { href: '/add', icon: <AddIcon />, label: 'Add Words', variant: 'accent' },
             { href: '/export', icon: <ExportIcon />, label: 'Export to Anki', variant: 'outline' },
             { href: '/import', icon: <ImportIcon />, label: 'Import', variant: 'outline' },

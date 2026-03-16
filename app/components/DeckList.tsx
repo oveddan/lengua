@@ -52,19 +52,19 @@ export function DeckList({ decks, onDelete }: DeckListProps) {
             <div className="flex gap-2 relative z-10">
               <Link
                 href={`/review?deck=${deck.id}`}
-                className="px-3 py-1.5 text-sm font-medium bg-primary text-white rounded-lg hover:bg-primary-hover transition"
+                className="px-2.5 py-1.5 sm:px-3 text-xs sm:text-sm font-medium bg-primary text-white rounded-lg hover:bg-primary-hover transition"
               >
                 Review
               </Link>
               <Link
                 href={`/add?deck=${deck.id}`}
-                className="px-3 py-1.5 text-sm font-medium bg-accent text-white rounded-lg hover:bg-accent-hover transition"
+                className="px-2.5 py-1.5 sm:px-3 text-xs sm:text-sm font-medium bg-accent text-white rounded-lg hover:bg-accent-hover transition"
               >
                 Add
               </Link>
               <button
                 onClick={() => onDelete(deck.id)}
-                className="px-3 py-1.5 text-sm font-medium bg-error-light text-error rounded-lg hover:opacity-80 transition"
+                className="px-2.5 py-1.5 sm:px-3 text-xs sm:text-sm font-medium bg-error-light text-error rounded-lg hover:opacity-80 transition"
               >
                 Delete
               </button>

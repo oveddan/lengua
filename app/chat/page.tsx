@@ -45,6 +45,7 @@ export default function ChatPage() {
   const [copied, setCopied] = useState(false);
   const [showNewSession, setShowNewSession] = useState(false);
   const [newSessionName, setNewSessionName] = useState('');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Deck state for navigation to /add
@@ -587,100 +588,143 @@ export default function ChatPage() {
     setActiveCardExchangeId(null);
   }
 
+  function handleSelectSession(id: string) {
+    setSelectedSessionId(id);
+    setSidebarOpen(false);
+  }
+
+  const sidebarContent = (
+    <>
+      <div className="p-4 border-b border-border">
+        <div className="flex justify-between items-center mb-2">
+          <h2 className="font-semibold text-text">Conversations</h2>
+          <Link href="/" className="text-primary text-sm hover:underline">
+            Home
+          </Link>
+        </div>
+        <button
+          onClick={() => setShowNewSession(true)}
+          className="w-full py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-hover transition"
+        >
+          + New Conversation
+        </button>
+      </div>
+
+      {showNewSession && (
+        <div className="p-4 border-b border-border bg-background">
+          <input
+            type="text"
+            value={newSessionName}
+            onChange={(e) => setNewSessionName(e.target.value)}
+            placeholder="Name (optional)..."
+            className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-surface text-text placeholder:text-text-placeholder mb-2"
+            autoFocus
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={createSession}
+              className="flex-1 py-1 bg-secondary text-white rounded text-sm hover:bg-secondary-hover"
+            >
+              Create
+            </button>
+            <button
+              onClick={() => {
+                setShowNewSession(false);
+                setNewSessionName('');
+              }}
+              className="flex-1 py-1 bg-surface border border-border text-text rounded text-sm hover:bg-background"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="flex-1 overflow-y-auto">
+        {sessions.length === 0 ? (
+          <div className="p-4 text-text-muted text-sm">No conversations yet</div>
+        ) : (
+          sessions.map((session) => (
+            <div
+              key={session.id}
+              onClick={() => handleSelectSession(session.id)}
+              className={`p-3 border-b border-border cursor-pointer hover:bg-background transition ${
+                selectedSessionId === session.id ? 'bg-primary/10 border-l-4 border-l-primary' : ''
+              }`}
+            >
+              <div className="flex justify-between items-start">
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-text truncate">
+                    {session.name || 'Untitled'}
+                  </div>
+                  <div className="text-xs text-text-muted">
+                    {session.exchangeCount} message{session.exchangeCount !== 1 ? 's' : ''}
+                  </div>
+                </div>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    deleteSession(session.id);
+                  }}
+                  className="text-error text-xs hover:underline ml-2"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </>
+  );
+
   return (
     <div className="min-h-screen bg-background flex">
-      {/* Sessions Sidebar */}
-      <div className="w-64 bg-surface border-r border-border flex flex-col">
-        <div className="p-4 border-b border-border">
-          <div className="flex justify-between items-center mb-2">
-            <h2 className="font-semibold text-text">Conversations</h2>
-            <Link href="/" className="text-primary text-sm hover:underline">
-              Home
-            </Link>
-          </div>
-          <button
-            onClick={() => setShowNewSession(true)}
-            className="w-full py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-hover transition"
-          >
-            + New Conversation
-          </button>
-        </div>
+      {/* Desktop Sidebar */}
+      <div className="hidden md:flex w-64 bg-surface border-r border-border flex-col">
+        {sidebarContent}
+      </div>
 
-        {showNewSession && (
-          <div className="p-4 border-b border-border bg-background">
-            <input
-              type="text"
-              value={newSessionName}
-              onChange={(e) => setNewSessionName(e.target.value)}
-              placeholder="Name (optional)..."
-              className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-surface text-text placeholder:text-text-placeholder mb-2"
-              autoFocus
-            />
-            <div className="flex gap-2">
-              <button
-                onClick={createSession}
-                className="flex-1 py-1 bg-secondary text-white rounded text-sm hover:bg-secondary-hover"
-              >
-                Create
-              </button>
-              <button
-                onClick={() => {
-                  setShowNewSession(false);
-                  setNewSessionName('');
-                }}
-                className="flex-1 py-1 bg-surface border border-border text-text rounded text-sm hover:bg-background"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
-
-        <div className="flex-1 overflow-y-auto">
-          {sessions.length === 0 ? (
-            <div className="p-4 text-text-muted text-sm">No conversations yet</div>
-          ) : (
-            sessions.map((session) => (
-              <div
-                key={session.id}
-                onClick={() => setSelectedSessionId(session.id)}
-                className={`p-3 border-b border-border cursor-pointer hover:bg-background transition ${
-                  selectedSessionId === session.id ? 'bg-primary/10 border-l-4 border-l-primary' : ''
-                }`}
-              >
-                <div className="flex justify-between items-start">
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium text-text truncate">
-                      {session.name || 'Untitled'}
-                    </div>
-                    <div className="text-xs text-text-muted">
-                      {session.exchangeCount} message{session.exchangeCount !== 1 ? 's' : ''}
-                    </div>
-                  </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteSession(session.id);
-                    }}
-                    className="text-error text-xs hover:underline ml-2"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            ))
-          )}
+      {/* Mobile Sidebar Overlay */}
+      <div
+        className={`fixed inset-0 z-40 md:hidden transition-opacity duration-300 ${
+          sidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        }`}
+      >
+        {/* Backdrop */}
+        <div
+          className="absolute inset-0 bg-black/50"
+          onClick={() => setSidebarOpen(false)}
+        />
+        {/* Drawer */}
+        <div
+          className={`absolute inset-y-0 left-0 w-72 bg-surface flex flex-col transition-transform duration-300 ${
+            sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
+        >
+          {sidebarContent}
         </div>
       </div>
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
-        <div className="p-4 border-b border-border bg-surface">
-          <h1 className="text-xl font-bold text-text">Spanish Chat Assistant</h1>
-          <p className="text-sm text-text-muted">
-            Ask &quot;How do you say...&quot;, paste Spanish text, or check your Spanish
-          </p>
+        <div className="p-4 border-b border-border bg-surface flex items-center gap-3">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="md:hidden p-1 text-text-muted hover:text-text"
+            aria-label="Open conversations"
+          >
+            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+            </svg>
+          </button>
+          <div>
+            <h1 className="text-xl font-bold text-text">Spanish Chat Assistant</h1>
+            <p className="text-sm text-text-muted">
+              Ask &quot;How do you say...&quot;, paste Spanish text, or check your Spanish
+            </p>
+          </div>
         </div>
 
         {/* Messages */}
@@ -808,7 +852,7 @@ export default function ChatPage() {
         )}
 
         {/* Input */}
-        <form onSubmit={handleSubmit} className="p-4 border-t border-border bg-surface">
+        <form onSubmit={handleSubmit} className="p-4 pb-[max(1rem,env(safe-area-inset-bottom))] border-t border-border bg-surface">
           <div className="flex gap-2">
             <input
               type="text"

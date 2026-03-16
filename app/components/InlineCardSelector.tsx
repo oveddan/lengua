@@ -96,7 +96,7 @@ export function InlineCardSelector({
   // Loading state
   if (state.status === 'loading') {
     return (
-      <div className="ml-12 bg-surface border border-border rounded-lg p-4">
+      <div className="ml-2 sm:ml-12 bg-surface border border-border rounded-lg p-4">
         <div className="flex items-center gap-2 text-text-muted">
           <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
@@ -111,7 +111,7 @@ export function InlineCardSelector({
   // Loading conjugations state
   if (state.status === 'loadingConjugations') {
     return (
-      <div className="ml-12 bg-surface border border-border rounded-lg p-4">
+      <div className="ml-2 sm:ml-12 bg-surface border border-border rounded-lg p-4">
         <div className="flex items-center gap-2 text-text-muted">
           <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
@@ -126,7 +126,7 @@ export function InlineCardSelector({
   // Saved state
   if (state.status === 'saved') {
     return (
-      <div className="ml-12 bg-success/10 border border-success/30 rounded-lg p-4">
+      <div className="ml-2 sm:ml-12 bg-success/10 border border-success/30 rounded-lg p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-success">
             <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -148,7 +148,7 @@ export function InlineCardSelector({
   // Error state
   if (state.error) {
     return (
-      <div className="ml-12 bg-error/10 border border-error/30 rounded-lg p-4">
+      <div className="ml-2 sm:ml-12 bg-error/10 border border-error/30 rounded-lg p-4">
         <div className="flex items-center justify-between">
           <span className="text-error">{state.error}</span>
           <button
@@ -165,7 +165,7 @@ export function InlineCardSelector({
   // Generating state
   if (state.status === 'generating') {
     return (
-      <div className="ml-12 bg-surface border border-border rounded-lg p-4">
+      <div className="ml-2 sm:ml-12 bg-surface border border-border rounded-lg p-4">
         <div className="flex items-center gap-2 text-text-muted">
           <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
@@ -180,7 +180,7 @@ export function InlineCardSelector({
   // Preview state - show generated cards
   if (state.status === 'previewing' || state.status === 'saving') {
     return (
-      <div className="ml-12 bg-surface border border-border rounded-lg p-4 space-y-4">
+      <div className="ml-2 sm:ml-12 bg-surface border border-border rounded-lg p-4 space-y-4">
         <div className="text-sm font-medium text-text">Preview Cards</div>
 
         <div className="space-y-3 max-h-80 overflow-y-auto">
@@ -260,7 +260,7 @@ export function InlineCardSelector({
   // Empty analysis
   if (state.status === 'selecting' && state.phrases.length === 0 && state.words.length === 0) {
     return (
-      <div className="ml-12 bg-surface border border-border rounded-lg p-4">
+      <div className="ml-2 sm:ml-12 bg-surface border border-border rounded-lg p-4">
         <div className="flex items-center justify-between">
           <span className="text-text-muted">No words or phrases detected</span>
           <button
@@ -276,7 +276,7 @@ export function InlineCardSelector({
 
   // Selection state
   return (
-    <div className="ml-12 bg-surface border border-border rounded-lg p-4 space-y-4">
+    <div className="ml-2 sm:ml-12 bg-surface border border-border rounded-lg p-4 space-y-4">
       <div className="text-sm font-medium text-text">Select words to learn</div>
 
       {/* Phrases Section */}

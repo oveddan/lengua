@@ -475,7 +475,7 @@ export default function ReviewPage() {
   }
 
   if (loading) {
-    return <div className="min-h-screen bg-background p-8 text-center text-text">Loading...</div>;
+    return <div className="min-h-screen bg-background p-4 sm:p-8 text-center text-text">Loading...</div>;
   }
 
   // Show waiting screen if we have learning cards but no cards in queue
@@ -540,7 +540,7 @@ export default function ReviewPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="max-w-2xl mx-auto p-8">
+      <div className="max-w-2xl mx-auto p-4 sm:p-8">
         <div className="flex justify-between items-center mb-4">
           <Link href="/" className="text-primary hover:underline">
             &larr; Back
@@ -566,7 +566,7 @@ export default function ReviewPage() {
         </div>
 
         {/* Progress bar */}
-        <div className="h-2 bg-border rounded-full mb-8">
+        <div className="h-2 bg-border rounded-full mb-4 sm:mb-8">
           <div
             className="h-full bg-primary rounded-full transition-all"
             style={{ width: `${100 - progress}%` }}
@@ -574,7 +574,7 @@ export default function ReviewPage() {
         </div>
 
         {/* Card */}
-        <div className="bg-surface rounded-xl shadow-card border border-border p-8 mb-8">
+        <div className="bg-surface rounded-xl shadow-card border border-border p-4 sm:p-8 mb-4 sm:mb-8">
           {/* Card state badge */}
           <div className="flex justify-between items-center mb-4">
             <div>
@@ -603,7 +603,7 @@ export default function ReviewPage() {
 
           {/* Cloze sentence */}
           <div
-            className="text-2xl text-center mb-6 leading-relaxed text-text"
+            className="text-xl sm:text-2xl text-center mb-6 leading-relaxed text-text"
             dangerouslySetInnerHTML={{
               __html: renderCloze(
                 card.cloze_sentence || card.context_sentence || `{{c1::${card.spanish_word}}}`,
@@ -641,13 +641,13 @@ export default function ReviewPage() {
 
         {/* Review buttons */}
         {showAnswer && (
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-4 gap-2 pb-[env(safe-area-inset-bottom)]">
             <button
               onClick={() => handleReview('again')}
               disabled={reviewing}
-              className="py-4 bg-again text-white rounded-lg font-medium hover:opacity-90 transition disabled:opacity-50"
+              className="py-3 sm:py-4 bg-again text-white rounded-lg font-medium hover:opacity-90 transition disabled:opacity-50"
             >
-              <div className="text-lg">Again</div>
+              <div className="text-base sm:text-lg">Again</div>
               <div className="text-xs opacity-75">
                 {buttonPreviews?.again?.interval || '...'}
               </div>
@@ -655,9 +655,9 @@ export default function ReviewPage() {
             <button
               onClick={() => handleReview('hard')}
               disabled={reviewing}
-              className="py-4 bg-hard text-white rounded-lg font-medium hover:opacity-90 transition disabled:opacity-50"
+              className="py-3 sm:py-4 bg-hard text-white rounded-lg font-medium hover:opacity-90 transition disabled:opacity-50"
             >
-              <div className="text-lg">Hard</div>
+              <div className="text-base sm:text-lg">Hard</div>
               <div className="text-xs opacity-75">
                 {buttonPreviews?.hard?.interval || '...'}
               </div>
@@ -665,9 +665,9 @@ export default function ReviewPage() {
             <button
               onClick={() => handleReview('good')}
               disabled={reviewing}
-              className="py-4 bg-good text-white rounded-lg font-medium hover:opacity-90 transition disabled:opacity-50"
+              className="py-3 sm:py-4 bg-good text-white rounded-lg font-medium hover:opacity-90 transition disabled:opacity-50"
             >
-              <div className="text-lg">Good</div>
+              <div className="text-base sm:text-lg">Good</div>
               <div className="text-xs opacity-75">
                 {buttonPreviews?.good?.interval || '...'}
               </div>
@@ -675,9 +675,9 @@ export default function ReviewPage() {
             <button
               onClick={() => handleReview('easy')}
               disabled={reviewing}
-              className="py-4 bg-easy text-white rounded-lg font-medium hover:opacity-90 transition disabled:opacity-50"
+              className="py-3 sm:py-4 bg-easy text-white rounded-lg font-medium hover:opacity-90 transition disabled:opacity-50"
             >
-              <div className="text-lg">Easy</div>
+              <div className="text-base sm:text-lg">Easy</div>
               <div className="text-xs opacity-75">
                 {buttonPreviews?.easy?.interval || '...'}
               </div>

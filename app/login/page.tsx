@@ -47,6 +47,7 @@ export default function LoginPage() {
         padding: '2rem',
         width: '100%',
         maxWidth: '360px',
+        margin: '0 1rem',
         display: 'flex',
         flexDirection: 'column',
         gap: '1rem',

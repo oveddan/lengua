@@ -223,10 +223,10 @@ export default function AddPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="max-w-4xl mx-auto p-8">
+      <div className="max-w-4xl mx-auto p-4 sm:p-8">
         {/* Header */}
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold text-text">Add New Words</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-text">Add New Words</h1>
           <Link href="/" className="text-primary hover:underline text-sm">
             ← Back to Home
           </Link>

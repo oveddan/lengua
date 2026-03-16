@@ -106,6 +106,19 @@ body {
   background: var(--color-background);
   color: var(--color-text);
   font-family: system-ui, -apple-system, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Prevent double-tap zoom on iOS */
+button, a, input, textarea, select {
+  touch-action: manipulation;
+}
+
+/* Prevent iOS auto-zoom on input focus (requires >= 16px) */
+@media (max-width: 767px) {
+  input, textarea, select {
+    font-size: 16px;
+  }
 }
 
 /* Form elements */
