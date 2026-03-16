@@ -641,7 +641,7 @@ export default function ReviewPage() {
 
         {/* Review buttons */}
         {showAnswer && (
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-4 gap-2 pb-[env(safe-area-inset-bottom)]">
             <button
               onClick={() => handleReview('again')}
               disabled={reviewing}

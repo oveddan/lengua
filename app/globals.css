@@ -115,13 +115,10 @@ button, a, input, textarea, select {
 }
 
 /* Prevent iOS auto-zoom on input focus (requires >= 16px) */
-input, textarea, select {
-  font-size: 16px;
-}
-
-/* Safe area padding for standalone PWA mode */
-.safe-area-bottom {
-  padding-bottom: env(safe-area-inset-bottom);
+@media (max-width: 767px) {
+  input, textarea, select {
+    font-size: 16px;
+  }
 }
 
 /* Form elements */
