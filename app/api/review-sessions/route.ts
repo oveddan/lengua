@@ -93,7 +93,7 @@ function shuffleWithSpacing(cards: CardLike[]): CardLike[] {
 // POST: Create a new review session
 export async function POST(request: NextRequest) {
   // Clean up old sessions
-  cleanupOldReviewSessions();
+  await cleanupOldReviewSessions();
 
   const body = await request.json();
   const deckId = body.deckId || null;
@@ -102,9 +102,9 @@ export async function POST(request: NextRequest) {
   // Get cards based on mode
   let cards;
   if (studyAhead) {
-    cards = getStudyAheadCards(deckId || undefined, 20);
+    cards = await getStudyAheadCards(deckId || undefined, 20);
   } else {
-    cards = getDueCards(deckId || undefined);
+    cards = await getDueCards(deckId || undefined);
   }
 
   if (cards.length === 0) {
@@ -116,7 +116,7 @@ export async function POST(request: NextRequest) {
   const cardIds = shuffledCards.map(c => c.id);
 
   // Create session
-  const session = createReviewSession(cardIds, deckId || undefined, studyAhead);
+  const session = await createReviewSession(cardIds, deckId || undefined, studyAhead);
 
   return NextResponse.json({
     id: session.id,
@@ -134,13 +134,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Session ID required' }, { status: 400 });
   }
 
-  const session = getReviewSession(id);
+  const session = await getReviewSession(id);
   if (!session) {
     return NextResponse.json({ error: 'Session not found' }, { status: 404 });
   }
 
   const cardIds = JSON.parse(session.card_order) as string[];
-  const cards = cardIds.map(id => getCard(id)).filter(Boolean);
+  const cards = (await Promise.all(cardIds.map(id => getCard(id)))).filter(Boolean);
 
   return NextResponse.json({
     id: session.id,
@@ -164,10 +164,10 @@ export async function PATCH(request: NextRequest) {
   const body = await request.json();
 
   if (typeof body.currentIndex === 'number') {
-    updateReviewSessionIndex(id, body.currentIndex);
+    await updateReviewSessionIndex(id, body.currentIndex);
   }
 
-  const session = getReviewSession(id);
+  const session = await getReviewSession(id);
   if (!session) {
     return NextResponse.json({ error: 'Session not found' }, { status: 404 });
   }
@@ -184,6 +184,6 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'Session ID required' }, { status: 400 });
   }
 
-  deleteReviewSession(id);
+  await deleteReviewSession(id);
   return NextResponse.json({ success: true });
 }

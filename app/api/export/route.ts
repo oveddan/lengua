@@ -7,8 +7,8 @@ export async function GET(request: NextRequest) {
   const format = (searchParams.get('format') as 'basic' | 'cloze') || 'cloze';
   const includeContext = searchParams.get('includeContext') !== 'false';
 
-  const content = exportToAnki({ deckId, format, includeContext });
-  const filename = getExportFileName(deckId);
+  const content = await exportToAnki({ deckId, format, includeContext });
+  const filename = await getExportFileName(deckId);
 
   return NextResponse.json({ content, filename });
 }

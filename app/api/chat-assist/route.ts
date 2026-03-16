@@ -21,18 +21,18 @@ export async function POST(request: NextRequest) {
   // Get or create session
   let currentSessionId = sessionId;
   if (!currentSessionId) {
-    const newSession = createChatSession();
+    const newSession = await createChatSession();
     currentSessionId = newSession.id;
   } else {
     // Verify session exists
-    const session = getChatSession(currentSessionId);
+    const session = await getChatSession(currentSessionId);
     if (!session) {
       return NextResponse.json({ error: 'Session not found' }, { status: 404 });
     }
   }
 
   // Get conversation context
-  const previousExchanges = getChatExchangesBySession(currentSessionId);
+  const previousExchanges = await getChatExchangesBySession(currentSessionId);
   const conversationContext = previousExchanges
     .map(ex => `You: ${ex.input}\nAssistant: ${ex.response_main}`)
     .join('\n\n');
@@ -111,7 +111,7 @@ Return JSON only (no markdown):
   const parsed = JSON.parse(jsonStr.trim());
 
   // Save exchange to database
-  const exchange = createChatExchange({
+  const exchange = await createChatExchange({
     session_id: currentSessionId,
     input: input.trim(),
     intent: parsed.intent,

@@ -32,15 +32,6 @@ interface SentenceAnalysis {
   }[];
 }
 
-interface WordWithSentences {
-  spanish_word: string;
-  translation: string;
-  sentences: {
-    spanish: string;
-    cloze: string;
-  }[];
-}
-
 interface CardData {
   spanish_word: string;
   translation: string;
@@ -251,21 +242,21 @@ async function main() {
     // Get or create deck
     let deckId: string;
     if (deckName) {
-      const existingDecks = getAllDecks();
+      const existingDecks = await getAllDecks();
       const existing = existingDecks.find(d => d.name.toLowerCase() === deckName.toLowerCase());
       if (existing) {
         deckId = existing.id;
         console.log(`Using existing deck: ${existing.name}`);
       } else {
-        const newDeck = createDeck(deckName);
+        const newDeck = await createDeck(deckName);
         deckId = newDeck.id;
         console.log(`Created new deck: ${deckName}`);
       }
     } else {
       // Use default deck or prompt
-      const decks = getAllDecks();
+      const decks = await getAllDecks();
       if (decks.length === 0) {
-        const newDeck = createDeck('Default');
+        const newDeck = await createDeck('Default');
         deckId = newDeck.id;
         console.log('Created default deck');
       } else {
@@ -277,7 +268,7 @@ async function main() {
     // Save cards
     console.log(`\nSaving ${cards.length} cards...`);
     for (const card of cards) {
-      createCard({
+      await createCard({
         deck_id: deckId,
         spanish_word: card.spanish_word,
         translation: card.translation,

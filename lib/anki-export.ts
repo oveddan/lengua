@@ -18,18 +18,18 @@ export interface ExportOptions {
 /**
  * Generate Anki import file content
  */
-export function exportToAnki(options: ExportOptions): string {
+export async function exportToAnki(options: ExportOptions): Promise<string> {
   const { deckId, format, includeContext } = options;
 
   // Get cards
-  const cards = deckId ? getCardsByDeck(deckId) : getAllCards();
+  const cards = deckId ? await getCardsByDeck(deckId) : await getAllCards();
 
   if (cards.length === 0) {
     return '';
   }
 
   // Get deck name for tags
-  const deck = deckId ? getDeck(deckId) : null;
+  const deck = deckId ? await getDeck(deckId) : null;
   const tag = deck ? deck.name.replace(/\s+/g, '_') : 'Spanish';
 
   const lines: string[] = [];
@@ -71,8 +71,8 @@ function escapeTab(text: string): string {
 /**
  * Get export file name
  */
-export function getExportFileName(deckId?: string): string {
-  const deck = deckId ? getDeck(deckId) : null;
+export async function getExportFileName(deckId?: string): Promise<string> {
+  const deck = deckId ? await getDeck(deckId) : null;
   const name = deck ? deck.name.replace(/\s+/g, '_') : 'spanish_flashcards';
   const date = new Date().toISOString().split('T')[0];
   return `${name}_${date}.txt`;
@@ -81,13 +81,13 @@ export function getExportFileName(deckId?: string): string {
 /**
  * Get export statistics
  */
-export function getExportStats(deckId?: string) {
-  const cards = deckId ? getCardsByDeck(deckId) : getAllCards();
-  const decks = deckId ? (getDeck(deckId) ? [getDeck(deckId)!] : []) : getAllDecks();
+export async function getExportStats(deckId?: string) {
+  const cards = deckId ? await getCardsByDeck(deckId) : await getAllCards();
+  const decks = deckId ? (await getDeck(deckId) ? [await getDeck(deckId)!] : []) : await getAllDecks();
 
   return {
     totalCards: cards.length,
     totalDecks: decks.length,
-    deckNames: decks.map(d => d.name),
+    deckNames: decks.map(d => d!.name),
   };
 }

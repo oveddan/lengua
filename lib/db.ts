@@ -1,88 +1,7 @@
-import Database from 'better-sqlite3';
-import path from 'path';
+import { neon } from '@neondatabase/serverless';
 import { v4 as uuidv4 } from 'uuid';
 
-const dbPath = path.join(process.cwd(), 'data', 'spanish.db');
-const db = new Database(dbPath);
-
-// Enable foreign keys
-db.pragma('foreign_keys = ON');
-
-// Initialize schema - base tables without new columns
-db.exec(`
-  CREATE TABLE IF NOT EXISTS decks (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    created_at TEXT DEFAULT (datetime('now'))
-  );
-
-  CREATE TABLE IF NOT EXISTS cards (
-    id TEXT PRIMARY KEY,
-    deck_id TEXT REFERENCES decks(id) ON DELETE CASCADE,
-    spanish_word TEXT NOT NULL,
-    translation TEXT NOT NULL,
-    context_sentence TEXT,
-    cloze_sentence TEXT,
-    interval INTEGER DEFAULT 0,
-    ease_factor REAL DEFAULT 2.5,
-    next_review TEXT DEFAULT (datetime('now')),
-    review_count INTEGER DEFAULT 0,
-    created_at TEXT DEFAULT (datetime('now'))
-  );
-
-  CREATE INDEX IF NOT EXISTS idx_cards_next_review ON cards(next_review);
-  CREATE INDEX IF NOT EXISTS idx_cards_deck_id ON cards(deck_id);
-`);
-
-// Migration: Add new columns if they don't exist (for existing databases)
-const columns = db.prepare("PRAGMA table_info(cards)").all() as { name: string }[];
-const columnNames = columns.map(c => c.name);
-
-if (!columnNames.includes('queue')) {
-  db.exec(`ALTER TABLE cards ADD COLUMN queue INTEGER DEFAULT 0`);
-  db.exec(`ALTER TABLE cards ADD COLUMN learning_step INTEGER DEFAULT 0`);
-  db.exec(`ALTER TABLE cards ADD COLUMN lapses INTEGER DEFAULT 0`);
-  // Migrate existing cards: cards with review_count > 0 are graduated (queue=2)
-  db.exec(`UPDATE cards SET queue = 2 WHERE review_count > 0`);
-}
-
-// Create index on queue (after migration ensures column exists)
-db.exec(`CREATE INDEX IF NOT EXISTS idx_cards_queue ON cards(queue)`);
-
-db.exec(`
-  -- Review sessions for spaced repetition
-  CREATE TABLE IF NOT EXISTS review_sessions (
-    id TEXT PRIMARY KEY,
-    deck_id TEXT REFERENCES decks(id) ON DELETE CASCADE,
-    card_order TEXT NOT NULL,
-    current_index INTEGER DEFAULT 0,
-    study_ahead INTEGER DEFAULT 0,
-    created_at TEXT DEFAULT (datetime('now'))
-  );
-
-  CREATE INDEX IF NOT EXISTS idx_review_sessions_deck ON review_sessions(deck_id);
-
-  -- Chat sessions for WhatsApp conversation helper
-  CREATE TABLE IF NOT EXISTS chat_sessions (
-    id TEXT PRIMARY KEY,
-    name TEXT,
-    created_at TEXT DEFAULT (datetime('now')),
-    updated_at TEXT DEFAULT (datetime('now'))
-  );
-
-  -- Chat exchanges within sessions
-  CREATE TABLE IF NOT EXISTS chat_exchanges (
-    id TEXT PRIMARY KEY,
-    session_id TEXT REFERENCES chat_sessions(id) ON DELETE CASCADE,
-    input TEXT NOT NULL,
-    intent TEXT NOT NULL,
-    response_main TEXT NOT NULL,
-    response_json TEXT,
-    created_at TEXT DEFAULT (datetime('now'))
-  );
-
-  CREATE INDEX IF NOT EXISTS idx_chat_exchanges_session ON chat_exchanges(session_id);
-`);
+const sql = neon(process.env.DATABASE_URL!);
 
 // Types
 export interface Deck {
@@ -145,267 +64,250 @@ export interface ChatExchange {
 }
 
 // Deck operations
-export function createDeck(name: string): Deck {
+export async function createDeck(name: string): Promise<Deck> {
   const id = uuidv4();
-  const stmt = db.prepare('INSERT INTO decks (id, name) VALUES (?, ?)');
-  stmt.run(id, name);
-  return getDeck(id)!;
+  const rows = await sql`INSERT INTO decks (id, name) VALUES (${id}, ${name}) RETURNING *`;
+  return rows[0] as Deck;
 }
 
-export function getDeck(id: string): Deck | null {
-  const stmt = db.prepare('SELECT * FROM decks WHERE id = ?');
-  return stmt.get(id) as Deck | null;
+export async function getDeck(id: string): Promise<Deck | null> {
+  const rows = await sql`SELECT * FROM decks WHERE id = ${id}`;
+  return (rows[0] as Deck) || null;
 }
 
-export function getAllDecks(): Deck[] {
-  const stmt = db.prepare('SELECT * FROM decks ORDER BY created_at DESC');
-  return stmt.all() as Deck[];
+export async function getAllDecks(): Promise<Deck[]> {
+  const rows = await sql`SELECT * FROM decks ORDER BY created_at DESC`;
+  return rows as Deck[];
 }
 
-export function deleteDeck(id: string): void {
-  const stmt = db.prepare('DELETE FROM decks WHERE id = ?');
-  stmt.run(id);
+export async function deleteDeck(id: string): Promise<void> {
+  await sql`DELETE FROM decks WHERE id = ${id}`;
 }
 
 // Card operations
-export function createCard(card: Omit<Card, 'id' | 'interval' | 'ease_factor' | 'next_review' | 'review_count' | 'queue' | 'learning_step' | 'lapses' | 'created_at'>): Card {
+export async function createCard(card: Omit<Card, 'id' | 'interval' | 'ease_factor' | 'next_review' | 'review_count' | 'queue' | 'learning_step' | 'lapses' | 'created_at'>): Promise<Card> {
   const id = uuidv4();
-  const stmt = db.prepare(`
+  const rows = await sql`
     INSERT INTO cards (id, deck_id, spanish_word, translation, context_sentence, cloze_sentence)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `);
-  stmt.run(id, card.deck_id, card.spanish_word, card.translation, card.context_sentence, card.cloze_sentence);
-  return getCard(id)!;
+    VALUES (${id}, ${card.deck_id}, ${card.spanish_word}, ${card.translation}, ${card.context_sentence}, ${card.cloze_sentence})
+    RETURNING *
+  `;
+  return rows[0] as Card;
 }
 
-export function getCard(id: string): Card | null {
-  const stmt = db.prepare('SELECT * FROM cards WHERE id = ?');
-  return stmt.get(id) as Card | null;
+export async function getCard(id: string): Promise<Card | null> {
+  const rows = await sql`SELECT * FROM cards WHERE id = ${id}`;
+  return (rows[0] as Card) || null;
 }
 
-export function getCardsByDeck(deckId: string): Card[] {
-  const stmt = db.prepare('SELECT * FROM cards WHERE deck_id = ? ORDER BY created_at DESC');
-  return stmt.all(deckId) as Card[];
+export async function getCardsByDeck(deckId: string): Promise<Card[]> {
+  const rows = await sql`SELECT * FROM cards WHERE deck_id = ${deckId} ORDER BY created_at DESC`;
+  return rows as Card[];
 }
 
-export function getAllCards(): Card[] {
-  const stmt = db.prepare('SELECT * FROM cards ORDER BY created_at DESC');
-  return stmt.all() as Card[];
+export async function getAllCards(): Promise<Card[]> {
+  const rows = await sql`SELECT * FROM cards ORDER BY created_at DESC`;
+  return rows as Card[];
 }
 
-export function getDueCards(deckId?: string): Card[] {
+export async function getDueCards(deckId?: string): Promise<Card[]> {
   const now = new Date().toISOString();
-  // Get cards that are due: new cards (queue=0), review cards due (queue=2),
-  // and learning/relearning cards due (queue=1,3)
   if (deckId) {
-    const stmt = db.prepare(`
+    const rows = await sql`
       SELECT * FROM cards
-      WHERE deck_id = ? AND next_review <= ?
+      WHERE deck_id = ${deckId} AND next_review <= ${now}
       ORDER BY
         CASE queue
-          WHEN 1 THEN 0  -- Learning cards first
-          WHEN 3 THEN 1  -- Then relearning
-          WHEN 0 THEN 2  -- Then new
-          ELSE 3         -- Then review
+          WHEN 1 THEN 0
+          WHEN 3 THEN 1
+          WHEN 0 THEN 2
+          ELSE 3
         END,
         next_review ASC
-    `);
-    return stmt.all(deckId, now) as Card[];
+    `;
+    return rows as Card[];
   }
-  const stmt = db.prepare(`
+  const rows = await sql`
     SELECT * FROM cards
-    WHERE next_review <= ?
+    WHERE next_review <= ${now}
     ORDER BY
       CASE queue
-        WHEN 1 THEN 0  -- Learning cards first
-        WHEN 3 THEN 1  -- Then relearning
-        WHEN 0 THEN 2  -- Then new
-        ELSE 3         -- Then review
+        WHEN 1 THEN 0
+        WHEN 3 THEN 1
+        WHEN 0 THEN 2
+        ELSE 3
       END,
       next_review ASC
-  `);
-  return stmt.all(now) as Card[];
+  `;
+  return rows as Card[];
 }
 
-// Get cards for "study ahead" - not due yet, ordered by closest to due
-export function getStudyAheadCards(deckId?: string, limit: number = 20): Card[] {
+export async function getStudyAheadCards(deckId?: string, limit: number = 20): Promise<Card[]> {
   const now = new Date().toISOString();
   if (deckId) {
-    const stmt = db.prepare(`
-      SELECT * FROM cards
-      WHERE deck_id = ? AND queue = 2 AND next_review > ?
-      ORDER BY next_review ASC
-      LIMIT ?
-    `);
-    return stmt.all(deckId, now, limit) as Card[];
+    const rows = await sql`
+      SELECT * FROM cards WHERE deck_id = ${deckId} AND queue = 2 AND next_review > ${now}
+      ORDER BY next_review ASC LIMIT ${limit}
+    `;
+    return rows as Card[];
   }
-  const stmt = db.prepare(`
-    SELECT * FROM cards
-    WHERE queue = 2 AND next_review > ?
-    ORDER BY next_review ASC
-    LIMIT ?
-  `);
-  return stmt.all(now, limit) as Card[];
+  const rows = await sql`
+    SELECT * FROM cards WHERE queue = 2 AND next_review > ${now}
+    ORDER BY next_review ASC LIMIT ${limit}
+  `;
+  return rows as Card[];
 }
 
-// Get all learning/relearning cards (for in-session review)
-export function getLearningCards(deckId?: string): Card[] {
+export async function getLearningCards(deckId?: string): Promise<Card[]> {
   if (deckId) {
-    const stmt = db.prepare(`
-      SELECT * FROM cards
-      WHERE deck_id = ? AND queue IN (1, 3)
+    const rows = await sql`
+      SELECT * FROM cards WHERE deck_id = ${deckId} AND queue IN (1, 3)
       ORDER BY next_review ASC
-    `);
-    return stmt.all(deckId) as Card[];
+    `;
+    return rows as Card[];
   }
-  const stmt = db.prepare(`
-    SELECT * FROM cards
-    WHERE queue IN (1, 3)
-    ORDER BY next_review ASC
-  `);
-  return stmt.all() as Card[];
+  const rows = await sql`SELECT * FROM cards WHERE queue IN (1, 3) ORDER BY next_review ASC`;
+  return rows as Card[];
 }
 
-export function updateCard(id: string, updates: Partial<Card>): Card | null {
-  const card = getCard(id);
-  if (!card) return null;
+export async function updateCard(id: string, updates: Partial<Card>): Promise<Card | null> {
+  // Fetch current card, merge updates, write back
+  const current = await getCard(id);
+  if (!current) return null;
 
-  const fields = Object.keys(updates).filter(k => k !== 'id');
-  if (fields.length === 0) return card;
-
-  const setClause = fields.map(f => `${f} = ?`).join(', ');
-  const values = fields.map(f => updates[f as keyof Card]);
-
-  const stmt = db.prepare(`UPDATE cards SET ${setClause} WHERE id = ?`);
-  stmt.run(...values, id);
-
-  return getCard(id);
+  const merged = { ...current, ...updates };
+  const rows = await sql`
+    UPDATE cards SET
+      deck_id = ${merged.deck_id},
+      spanish_word = ${merged.spanish_word},
+      translation = ${merged.translation},
+      context_sentence = ${merged.context_sentence},
+      cloze_sentence = ${merged.cloze_sentence},
+      interval = ${merged.interval},
+      ease_factor = ${merged.ease_factor},
+      next_review = ${merged.next_review},
+      review_count = ${merged.review_count},
+      queue = ${merged.queue},
+      learning_step = ${merged.learning_step},
+      lapses = ${merged.lapses}
+    WHERE id = ${id}
+    RETURNING *
+  `;
+  return (rows[0] as Card) || null;
 }
 
-export function deleteCard(id: string): void {
-  const stmt = db.prepare('DELETE FROM cards WHERE id = ?');
-  stmt.run(id);
+export async function deleteCard(id: string): Promise<void> {
+  await sql`DELETE FROM cards WHERE id = ${id}`;
 }
 
 // Review session operations
-export function createReviewSession(
+export async function createReviewSession(
   cardIds: string[],
   deckId?: string,
   studyAhead: boolean = false
-): ReviewSession {
+): Promise<ReviewSession> {
   const id = uuidv4();
-  const stmt = db.prepare(`
+  const cardOrder = JSON.stringify(cardIds);
+  const studyAheadVal = studyAhead ? 1 : 0;
+  const deckIdVal = deckId || null;
+  const rows = await sql`
     INSERT INTO review_sessions (id, deck_id, card_order, study_ahead)
-    VALUES (?, ?, ?, ?)
-  `);
-  stmt.run(id, deckId || null, JSON.stringify(cardIds), studyAhead ? 1 : 0);
-  return getReviewSession(id)!;
+    VALUES (${id}, ${deckIdVal}, ${cardOrder}, ${studyAheadVal})
+    RETURNING *
+  `;
+  return rows[0] as ReviewSession;
 }
 
-export function getReviewSession(id: string): ReviewSession | null {
-  const stmt = db.prepare('SELECT * FROM review_sessions WHERE id = ?');
-  return stmt.get(id) as ReviewSession | null;
+export async function getReviewSession(id: string): Promise<ReviewSession | null> {
+  const rows = await sql`SELECT * FROM review_sessions WHERE id = ${id}`;
+  return (rows[0] as ReviewSession) || null;
 }
 
-export function updateReviewSessionIndex(id: string, index: number): void {
-  const stmt = db.prepare('UPDATE review_sessions SET current_index = ? WHERE id = ?');
-  stmt.run(index, id);
+export async function updateReviewSessionIndex(id: string, index: number): Promise<void> {
+  await sql`UPDATE review_sessions SET current_index = ${index} WHERE id = ${id}`;
 }
 
-export function deleteReviewSession(id: string): void {
-  const stmt = db.prepare('DELETE FROM review_sessions WHERE id = ?');
-  stmt.run(id);
+export async function deleteReviewSession(id: string): Promise<void> {
+  await sql`DELETE FROM review_sessions WHERE id = ${id}`;
 }
 
-// Clean up old review sessions (older than 24 hours)
-export function cleanupOldReviewSessions(): void {
-  const stmt = db.prepare(`
-    DELETE FROM review_sessions
-    WHERE created_at < datetime('now', '-1 day')
-  `);
-  stmt.run();
+export async function cleanupOldReviewSessions(): Promise<void> {
+  await sql`DELETE FROM review_sessions WHERE created_at < NOW() - INTERVAL '1 day'`;
 }
 
 // Stats
-export function getStats() {
-  const totalCards = db.prepare('SELECT COUNT(*) as count FROM cards').get() as { count: number };
-  const dueCards = db.prepare("SELECT COUNT(*) as count FROM cards WHERE next_review <= datetime('now')").get() as { count: number };
-  const totalDecks = db.prepare('SELECT COUNT(*) as count FROM decks').get() as { count: number };
+export async function getStats() {
+  const totalCards = await sql`SELECT COUNT(*) as count FROM cards`;
+  const dueCards = await sql`SELECT COUNT(*) as count FROM cards WHERE next_review <= NOW()`;
+  const totalDecks = await sql`SELECT COUNT(*) as count FROM decks`;
 
   return {
-    totalCards: totalCards.count,
-    dueCards: dueCards.count,
-    totalDecks: totalDecks.count,
+    totalCards: Number(totalCards[0].count),
+    dueCards: Number(dueCards[0].count),
+    totalDecks: Number(totalDecks[0].count),
   };
 }
 
 // Chat session operations
-export function createChatSession(name?: string): ChatSession {
+export async function createChatSession(name?: string): Promise<ChatSession> {
   const id = uuidv4();
-  const stmt = db.prepare('INSERT INTO chat_sessions (id, name) VALUES (?, ?)');
-  stmt.run(id, name || null);
-  return getChatSession(id)!;
+  const nameVal = name || null;
+  const rows = await sql`INSERT INTO chat_sessions (id, name) VALUES (${id}, ${nameVal}) RETURNING *`;
+  return rows[0] as ChatSession;
 }
 
-export function getChatSession(id: string): ChatSession | null {
-  const stmt = db.prepare('SELECT * FROM chat_sessions WHERE id = ?');
-  return stmt.get(id) as ChatSession | null;
+export async function getChatSession(id: string): Promise<ChatSession | null> {
+  const rows = await sql`SELECT * FROM chat_sessions WHERE id = ${id}`;
+  return (rows[0] as ChatSession) || null;
 }
 
-export function getAllChatSessions(): ChatSession[] {
-  const stmt = db.prepare('SELECT * FROM chat_sessions ORDER BY updated_at DESC');
-  return stmt.all() as ChatSession[];
+export async function getAllChatSessions(): Promise<ChatSession[]> {
+  const rows = await sql`SELECT * FROM chat_sessions ORDER BY updated_at DESC`;
+  return rows as ChatSession[];
 }
 
-export function updateChatSession(id: string, updates: Partial<ChatSession>): ChatSession | null {
-  const session = getChatSession(id);
-  if (!session) return null;
+export async function updateChatSession(id: string, updates: Partial<ChatSession>): Promise<ChatSession | null> {
+  const current = await getChatSession(id);
+  if (!current) return null;
 
-  const fields = Object.keys(updates).filter(k => k !== 'id');
-  if (fields.length === 0) return session;
-
-  const setClause = fields.map(f => `${f} = ?`).join(', ');
-  const values = fields.map(f => updates[f as keyof ChatSession]);
-
-  const stmt = db.prepare(`UPDATE chat_sessions SET ${setClause} WHERE id = ?`);
-  stmt.run(...values, id);
-
-  return getChatSession(id);
+  const merged = { ...current, ...updates };
+  const rows = await sql`
+    UPDATE chat_sessions SET
+      name = ${merged.name},
+      updated_at = ${merged.updated_at}
+    WHERE id = ${id}
+    RETURNING *
+  `;
+  return (rows[0] as ChatSession) || null;
 }
 
-export function deleteChatSession(id: string): void {
-  const stmt = db.prepare('DELETE FROM chat_sessions WHERE id = ?');
-  stmt.run(id);
+export async function deleteChatSession(id: string): Promise<void> {
+  await sql`DELETE FROM chat_sessions WHERE id = ${id}`;
 }
 
 // Chat exchange operations
-export function createChatExchange(exchange: Omit<ChatExchange, 'id' | 'created_at'>): ChatExchange {
+export async function createChatExchange(exchange: Omit<ChatExchange, 'id' | 'created_at'>): Promise<ChatExchange> {
   const id = uuidv4();
-  const stmt = db.prepare(`
+  const rows = await sql`
     INSERT INTO chat_exchanges (id, session_id, input, intent, response_main, response_json)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `);
-  stmt.run(id, exchange.session_id, exchange.input, exchange.intent, exchange.response_main, exchange.response_json);
-
+    VALUES (${id}, ${exchange.session_id}, ${exchange.input}, ${exchange.intent}, ${exchange.response_main}, ${exchange.response_json})
+    RETURNING *
+  `;
   // Update session's updated_at
-  db.prepare('UPDATE chat_sessions SET updated_at = datetime(\'now\') WHERE id = ?').run(exchange.session_id);
-
-  return getChatExchange(id)!;
+  await sql`UPDATE chat_sessions SET updated_at = NOW() WHERE id = ${exchange.session_id}`;
+  return rows[0] as ChatExchange;
 }
 
-export function getChatExchange(id: string): ChatExchange | null {
-  const stmt = db.prepare('SELECT * FROM chat_exchanges WHERE id = ?');
-  return stmt.get(id) as ChatExchange | null;
+export async function getChatExchange(id: string): Promise<ChatExchange | null> {
+  const rows = await sql`SELECT * FROM chat_exchanges WHERE id = ${id}`;
+  return (rows[0] as ChatExchange) || null;
 }
 
-export function getChatExchangesBySession(sessionId: string): ChatExchange[] {
-  const stmt = db.prepare('SELECT * FROM chat_exchanges WHERE session_id = ? ORDER BY created_at ASC');
-  return stmt.all(sessionId) as ChatExchange[];
+export async function getChatExchangesBySession(sessionId: string): Promise<ChatExchange[]> {
+  const rows = await sql`SELECT * FROM chat_exchanges WHERE session_id = ${sessionId} ORDER BY created_at ASC`;
+  return rows as ChatExchange[];
 }
 
-export function deleteChatExchange(id: string): void {
-  const stmt = db.prepare('DELETE FROM chat_exchanges WHERE id = ?');
-  stmt.run(id);
+export async function deleteChatExchange(id: string): Promise<void> {
+  await sql`DELETE FROM chat_exchanges WHERE id = ${id}`;
 }
-
-export default db;

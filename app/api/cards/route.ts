@@ -9,21 +9,21 @@ export async function GET(request: NextRequest) {
   const limit = searchParams.get('limit');
 
   if (due === 'true') {
-    const cards = getDueCards(deckId || undefined);
+    const cards = await getDueCards(deckId || undefined);
     return NextResponse.json(cards);
   }
 
   if (studyAhead === 'true') {
-    const cards = getStudyAheadCards(deckId || undefined, limit ? parseInt(limit) : 20);
+    const cards = await getStudyAheadCards(deckId || undefined, limit ? parseInt(limit) : 20);
     return NextResponse.json(cards);
   }
 
   if (deckId) {
-    const cards = getCardsByDeck(deckId);
+    const cards = await getCardsByDeck(deckId);
     return NextResponse.json(cards);
   }
 
-  const cards = getAllCards();
+  const cards = await getAllCards();
   return NextResponse.json(cards);
 }
 
@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const card = createCard({
+  const card = await createCard({
     deck_id: body.deck_id,
     spanish_word: body.spanish_word,
     translation: body.translation,
@@ -57,7 +57,7 @@ export async function PATCH(request: NextRequest) {
   }
 
   const updates = await request.json();
-  const card = updateCard(id, updates);
+  const card = await updateCard(id, updates);
 
   if (!card) {
     return NextResponse.json({ error: 'Card not found' }, { status: 404 });
@@ -74,6 +74,6 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'ID is required' }, { status: 400 });
   }
 
-  deleteCard(id);
+  await deleteCard(id);
   return NextResponse.json({ success: true });
 }

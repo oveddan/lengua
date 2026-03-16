@@ -8,18 +8,20 @@ import {
 } from '@/lib/db';
 
 export async function GET() {
-  const sessions = getAllChatSessions();
+  const sessions = await getAllChatSessions();
   // Include exchange count for each session
-  const sessionsWithStats = sessions.map(session => ({
-    ...session,
-    exchangeCount: getChatExchangesBySession(session.id).length,
-  }));
+  const sessionsWithStats = await Promise.all(
+    sessions.map(async session => ({
+      ...session,
+      exchangeCount: (await getChatExchangesBySession(session.id)).length,
+    }))
+  );
   return NextResponse.json({ sessions: sessionsWithStats });
 }
 
 export async function POST(request: NextRequest) {
   const { name } = await request.json();
-  const session = createChatSession(name?.trim() || undefined);
+  const session = await createChatSession(name?.trim() || undefined);
   return NextResponse.json(session);
 }
 
@@ -30,7 +32,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: 'ID is required' }, { status: 400 });
   }
 
-  const session = updateChatSession(id, { name: name?.trim() || null });
+  const session = await updateChatSession(id, { name: name?.trim() || null });
   if (!session) {
     return NextResponse.json({ error: 'Session not found' }, { status: 404 });
   }
@@ -46,6 +48,6 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'ID is required' }, { status: 400 });
   }
 
-  deleteChatSession(id);
+  await deleteChatSession(id);
   return NextResponse.json({ success: true });
 }
