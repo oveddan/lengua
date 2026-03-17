@@ -33,9 +33,14 @@ interface CardLike {
 function shuffleWithSpacing(cards: CardLike[]): CardLike[] {
   if (cards.length <= 1) return cards;
 
+  // Shuffle first to ensure random base ordering.
+  // Without this, cards with unique base words retain their database order
+  // because the interleaving algorithm picks deterministically on ties.
+  const randomized = shuffleArray(cards);
+
   // Group cards by base word
   const groups = new Map<string, CardLike[]>();
-  for (const card of cards) {
+  for (const card of randomized) {
     const base = getBaseWord(card.spanish_word);
     if (!groups.has(base)) {
       groups.set(base, []);
