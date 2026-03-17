@@ -1,4 +1,4 @@
-import { anthropic, extractJsonFromResponse, getTextFromResponse } from './claude-helpers';
+import { callClaudeJson, DISAMBIGUATING_TRANSLATION_INSTRUCTIONS } from './claude-helpers';
 
 export interface VocabExtractionResult {
   skippable: boolean;
@@ -23,11 +23,7 @@ Instructions:
 - If the question is purely about grammar rules, writing style, or is too vague to extract specific vocabulary, mark it as skippable
 - Also extract any Spanish sentences found verbatim in the question text
 
-IMPORTANT for translations: When a word has common synonyms in Spanish, provide a disambiguating translation that distinguishes it from similar words. For example:
-- "meter" → "to put (into enclosed space)" not just "to put"
-- "poner" → "to put (place on surface)" not just "to put"
-- "saber" → "to know (facts/how to)" not just "to know"
-- "conocer" → "to know (be familiar with)" not just "to know"
+${DISAMBIGUATING_TRANSLATION_INSTRUCTIONS}
 
 Respond in JSON only:
 {
@@ -47,19 +43,12 @@ If skippable:
   "spanish_sentences": []
 }`;
 
-  const message = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: 1000,
-    messages: [{ role: 'user', content: prompt }],
-  });
-
-  const text = getTextFromResponse(message);
-  const result = JSON.parse(extractJsonFromResponse(text));
+  const result = await callClaudeJson<Record<string, unknown>>(prompt);
 
   return {
-    skippable: result.skippable || false,
-    skip_reason: result.skip_reason || null,
-    vocab: result.vocab || [],
-    spanish_sentences: result.spanish_sentences || [],
+    skippable: (result.skippable as boolean) || false,
+    skip_reason: (result.skip_reason as string) || null,
+    vocab: (result.vocab as VocabExtractionResult['vocab']) || [],
+    spanish_sentences: (result.spanish_sentences as string[]) || [],
   };
 }

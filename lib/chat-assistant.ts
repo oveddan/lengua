@@ -1,9 +1,10 @@
-import { anthropic, extractJsonFromResponse, getTextFromResponse } from './claude-helpers';
+import { callClaudeJson } from './claude-helpers';
 import {
   createChatSession,
   createChatExchange,
   getChatExchangesBySession,
   getChatSession,
+  ChatExchange,
 } from './db';
 
 export interface ChatResponse {
@@ -22,6 +23,12 @@ export interface ChatResult {
   exchangeId: string;
   intent: string;
   response: ChatResponse['response'];
+}
+
+export function buildConversationContext(exchanges: ChatExchange[]): string {
+  return exchanges
+    .map(ex => `You: ${ex.input}\nAssistant: ${ex.response_main}`)
+    .join('\n\n');
 }
 
 function buildChatPrompt(input: string, conversationContext: string): string {
@@ -85,20 +92,11 @@ export async function chatAssist(input: string, sessionId?: string): Promise<Cha
 
   // Get conversation context
   const previousExchanges = await getChatExchangesBySession(currentSessionId);
-  const conversationContext = previousExchanges
-    .map(ex => `You: ${ex.input}\nAssistant: ${ex.response_main}`)
-    .join('\n\n');
+  const conversationContext = buildConversationContext(previousExchanges);
 
   const prompt = buildChatPrompt(input, conversationContext);
 
-  const message = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: 1000,
-    messages: [{ role: 'user', content: prompt }],
-  });
-
-  const text = getTextFromResponse(message);
-  const parsed = JSON.parse(extractJsonFromResponse(text));
+  const parsed = await callClaudeJson<ChatResponse>(prompt);
 
   // Save exchange to database
   const exchange = await createChatExchange({

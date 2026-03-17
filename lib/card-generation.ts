@@ -1,4 +1,4 @@
-import { anthropic, getTextFromResponse } from './claude-helpers';
+import { callClaudeJson } from './claude-helpers';
 
 export interface SelectedWord {
   spanish: string;
@@ -33,7 +33,7 @@ export async function generateExtraSentences(
     ? `\n- IMPORTANT: The user is learning this word in the context of: "${userContext}". Generate sentences relevant to this context.`
     : '';
 
-  const extraPrompt = `Generate ${count} additional Spanish sentences using the word "${baseForm}" (${english}).
+  const prompt = `Generate ${count} additional Spanish sentences using the word "${baseForm}" (${english}).
 
 Requirements:
 - Beginner to intermediate level
@@ -46,20 +46,8 @@ Respond in JSON only:
   ]
 }`;
 
-  const message = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: 500,
-    messages: [{ role: 'user', content: extraPrompt }],
-  });
-
-  const text = getTextFromResponse(message);
-  let extraJsonStr = text;
-  const extraMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (extraMatch && extraMatch[1]) {
-    extraJsonStr = extraMatch[1];
-  }
-  const extraJson = JSON.parse(extraJsonStr.trim());
-  return extraJson.sentences;
+  const result = await callClaudeJson<{ sentences: Array<{ spanish: string; cloze: string }> }>(prompt, 500);
+  return result.sentences;
 }
 
 export async function generateCards(

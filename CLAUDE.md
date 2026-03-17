@@ -53,11 +53,11 @@ pnpm test:db                                  # Test database operations
 All database queries and business logic MUST live in reusable `lib/` functions. API routes (`app/api/`) should only handle HTTP concerns (parsing request, returning response) and delegate to `lib/` functions. Never put DB queries, Claude API calls, prompt construction, or domain logic directly in route handlers.
 
 - **db.ts**: Database layer. Exports `Card`, `Deck`, `ReviewSession`, `ChatSession`, `ChatExchange` types plus CRUD functions.
-- **claude-helpers.ts**: Shared Claude API utilities. Exports `anthropic` client instance, `extractJsonFromResponse(text)`, and `getTextFromResponse(message)`.
+- **claude-helpers.ts**: Shared Claude API utilities. Exports `anthropic` client, `callClaudeJson<T>(prompt, maxTokens?)` for prompt→parsed JSON in one call, `extractJsonFromResponse(text)`, `getTextFromResponse(message)`, `CLAUDE_MODEL` constant, and `DISAMBIGUATING_TRANSLATION_INSTRUCTIONS` shared prompt fragment.
 - **sentence-analyzer.ts**: `analyzeSentence(sentence)` analyzes a Spanish word or sentence via Claude, returning translations, phrases, words, and verb conjugations.
 - **card-generation.ts**: `generateCards(originalSentence, selectedWords, options?)` generates cloze cards with optional extra sentences via Claude. Also exports `generateCloze()` and `generateExtraSentences()`.
 - **card-spacing.ts**: `shuffleWithSpacing(cards)` shuffles review cards while spacing related words apart. Also exports `shuffleArray()` and `getBaseWord()`.
-- **chat-assistant.ts**: `chatAssist(input, sessionId?)` handles chat intent detection, Claude API call, and exchange persistence.
+- **chat-assistant.ts**: `chatAssist(input, sessionId?)` handles chat intent detection, Claude API call, and exchange persistence. Also exports `buildConversationContext(exchanges)` for formatting chat history.
 - **vocab-extraction.ts**: `extractVocab(question, title?)` extracts Spanish vocabulary from natural language questions via Claude.
 - **sm2.ts**: SM-2 spaced repetition algorithm. Use `reviewCard(card, 'again'|'hard'|'good'|'easy')` to calculate next review date.
 - **claude.ts**: `translateWord(spanishWord)` returns translation + context sentence + cloze format via Claude API.

@@ -1,4 +1,4 @@
-import { anthropic, extractJsonFromResponse, getTextFromResponse } from './claude-helpers';
+import { callClaudeJson, DISAMBIGUATING_TRANSLATION_INSTRUCTIONS } from './claude-helpers';
 
 export interface SentenceAnalysis {
   original_sentence: string;
@@ -17,13 +17,7 @@ Word: "${word}"
 
 If this is a verb (or conjugated form of a verb), provide conjugations WITH example sentences for each. For the example sentences, sometimes include the subject pronoun (yo, tú, él/ella, nosotros, ellos) and sometimes omit it - mix it up randomly like natural Spanish speakers do. If not a verb, just provide the translation.
 
-IMPORTANT for translations: When a word has common synonyms in Spanish, provide a disambiguating translation that distinguishes it from similar words. For example:
-- "meter" → "to put (into enclosed space)" not just "to put"
-- "poner" → "to put (place on surface)" not just "to put"
-- "coger" → "to grab/catch" not just "to take"
-- "tomar" → "to take (consume/accept)" not just "to take"
-- "saber" → "to know (facts/how to)" not just "to know"
-- "conocer" → "to know (be familiar with)" not just "to know"
+${DISAMBIGUATING_TRANSLATION_INSTRUCTIONS}
 
 Respond in JSON only:
 {
@@ -80,13 +74,7 @@ Provide:
 2. Common phrases/idioms in the sentence (multi-word expressions that should be learned together, like "hay manera de" = "is there a way to", "tener que" = "to have to", etc.)
 3. Individual vocabulary words (focus on content words - nouns, verbs, adjectives, adverbs - skip very common words like "el", "la", "y", "de", "en", "a", "que", "es", "un", "una", and skip words that are already part of a phrase above)
 
-IMPORTANT for translations: When a word has common synonyms in Spanish, provide a disambiguating translation that distinguishes it from similar words. For example:
-- "meter" → "to put (into enclosed space)" not just "to put"
-- "poner" → "to put (place on surface)" not just "to put"
-- "coger" → "to grab/catch" not just "to take"
-- "tomar" → "to take (consume/accept)" not just "to take"
-- "saber" → "to know (facts/how to)" not just "to know"
-- "conocer" → "to know (be familiar with)" not just "to know"
+${DISAMBIGUATING_TRANSLATION_INSTRUCTIONS}
 
 Respond in JSON only:
 {
@@ -108,22 +96,15 @@ export async function analyzeSentence(sentence: string): Promise<SentenceAnalysi
     ? buildSingleWordPrompt(sentence)
     : buildSentencePrompt(sentence);
 
-  const message = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: 1000,
-    messages: [{ role: 'user', content: prompt }],
-  });
-
-  const text = getTextFromResponse(message);
-  const analysis = JSON.parse(extractJsonFromResponse(text));
+  const analysis = await callClaudeJson<Record<string, unknown>>(prompt);
 
   return {
-    original_sentence: analysis.original_sentence,
-    translation: analysis.translation,
-    phrases: analysis.phrases || [],
-    words: analysis.words || [],
-    is_verb: analysis.is_verb || false,
-    infinitive: analysis.infinitive || null,
-    conjugations: analysis.conjugations || null,
+    original_sentence: analysis.original_sentence as string,
+    translation: analysis.translation as string,
+    phrases: (analysis.phrases as SentenceAnalysis['phrases']) || [],
+    words: (analysis.words as SentenceAnalysis['words']) || [],
+    is_verb: (analysis.is_verb as boolean) || false,
+    infinitive: (analysis.infinitive as string) || null,
+    conjugations: (analysis.conjugations as SentenceAnalysis['conjugations']) || null,
   };
 }
