@@ -1,4 +1,4 @@
-# AI Anki
+# Lengua
 
 A Spanish vocabulary learning app that uses Claude AI to generate flashcards with spaced repetition scheduling. Enter a Spanish sentence or word, and the app analyzes it, generates translations with disambiguating context, creates cloze-deletion cards, and schedules reviews using the SM-2 algorithm.
 
