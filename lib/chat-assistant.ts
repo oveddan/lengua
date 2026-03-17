@@ -1,11 +1,13 @@
 import { callClaudeJson } from './claude-helpers';
+import { buildConversationContext } from './conversation';
 import {
   createChatSession,
   createChatExchange,
   getChatExchangesBySession,
   getChatSession,
-  ChatExchange,
 } from './db';
+
+export { buildConversationContext } from './conversation';
 
 export interface ChatResponse {
   intent: string;
@@ -23,12 +25,6 @@ export interface ChatResult {
   exchangeId: string;
   intent: string;
   response: ChatResponse['response'];
-}
-
-export function buildConversationContext(exchanges: ChatExchange[]): string {
-  return exchanges
-    .map(ex => `You: ${ex.input}\nAssistant: ${ex.response_main}`)
-    .join('\n\n');
 }
 
 function buildChatPrompt(input: string, conversationContext: string): string {

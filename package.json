@@ -11,6 +11,7 @@
     "test:translate": "tsx scripts/test-translate.ts",
     "test:db": "tsx scripts/test-db.ts",
     "test:json": "tsx scripts/test-json-parse.ts",
+    "test:lib": "tsx scripts/test-lib.ts",
     "sentence": "tsx scripts/sentence-to-cards.ts"
   },
   "dependencies": {
