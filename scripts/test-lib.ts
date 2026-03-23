@@ -187,6 +187,51 @@ assert(!allAdjacent, 'related cards (hablar) are spaced apart, not all adjacent'
 const spacedIds = spaced.map(c => c.id).sort();
 assert(spacedIds.join(',') === '1,2,3,4,5,6', 'all card IDs preserved');
 
+// Cards from same context sentence (same topic) should be spaced apart
+const topicCards = [
+  { id: '1', spanish_word: 'afeitarse', context_sentence: 'Me afeité con la navaja y me corté.' },
+  { id: '2', spanish_word: 'la navaja', context_sentence: 'Me afeité con la navaja y me corté.' },
+  { id: '3', spanish_word: 'cortarse', context_sentence: 'Me afeité con la navaja y me corté.' },
+  { id: '4', spanish_word: 'comer', context_sentence: 'Vamos a comer en el restaurante nuevo.' },
+  { id: '5', spanish_word: 'el restaurante', context_sentence: 'Vamos a comer en el restaurante nuevo.' },
+  { id: '6', spanish_word: 'dormir', context_sentence: 'Necesito dormir más horas.' },
+  { id: '7', spanish_word: 'leer', context_sentence: 'Me gusta leer libros en español.' },
+  { id: '8', spanish_word: 'escribir', context_sentence: 'Quiero escribir una carta.' },
+];
+
+// Run multiple times to account for randomness
+let topicSpacingWorks = false;
+for (let trial = 0; trial < 10; trial++) {
+  const topicSpaced = shuffleWithSpacing(topicCards);
+  assert(topicSpaced.length === 8, 'topic spacing: preserves all cards');
+
+  // Check that shaving cards (ids 1,2,3) are not all adjacent
+  const shavingIndices = topicSpaced
+    .map((c, i) => ['1', '2', '3'].includes(c.id) ? i : -1)
+    .filter(i => i >= 0);
+  let shavingAdjacent = true;
+  for (let i = 1; i < shavingIndices.length; i++) {
+    if (shavingIndices[i] - shavingIndices[i - 1] > 1) {
+      shavingAdjacent = false;
+      break;
+    }
+  }
+  if (!shavingAdjacent) {
+    topicSpacingWorks = true;
+    break;
+  }
+}
+assert(topicSpacingWorks, 'same-context cards are spread apart across topics');
+
+// Backward compat: cards without context_sentence still work
+const noContextCards = [
+  { id: '1', spanish_word: 'hablar' },
+  { id: '2', spanish_word: 'comer' },
+  { id: '3', spanish_word: 'vivir' },
+];
+const noContextSpaced = shuffleWithSpacing(noContextCards);
+assert(noContextSpaced.length === 3, 'cards without context_sentence still shuffle');
+
 // ─── buildConversationContext ───
 
 section('buildConversationContext');
