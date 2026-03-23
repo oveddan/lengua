@@ -1,11 +1,17 @@
 export interface CardLike {
   id: string;
   spanish_word: string;
+  context_sentence?: string | null;
 }
 
 export function getBaseWord(word: string): string {
   const base = word.split('(')[0].trim().toLowerCase();
   return base.split(' ').slice(0, 3).join(' ');
+}
+
+export function getContextKey(card: CardLike): string | null {
+  if (!card.context_sentence) return null;
+  return card.context_sentence.trim().toLowerCase().slice(0, 80);
 }
 
 export function shuffleArray<T>(arr: T[]): T[] {
@@ -57,13 +63,19 @@ export function shuffleWithSpacing(cards: CardLike[]): CardLike[] {
 
       const candidate = groupArrays[g][groupIndices[g]];
       const candidateBase = getBaseWord(candidate.spanish_word);
+      const candidateContext = getContextKey(candidate);
 
-      // Calculate score based on distance from last card of same group
+      // Calculate score based on distance from last related card
+      // (same base word OR same context sentence)
       let minDistance = result.length + 1;
-      for (let i = result.length - 1; i >= 0 && i >= result.length - 5; i--) {
+      for (let i = result.length - 1; i >= 0 && i >= result.length - 8; i--) {
+        const dist = result.length - i;
         if (getBaseWord(result[i].spanish_word) === candidateBase) {
-          minDistance = result.length - i;
+          minDistance = Math.min(minDistance, dist);
           break;
+        }
+        if (candidateContext && getContextKey(result[i]) === candidateContext) {
+          minDistance = Math.min(minDistance, dist);
         }
       }
 
