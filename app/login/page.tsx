@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { startAuthentication } from '@simplewebauthn/browser';
 
@@ -12,8 +12,9 @@ export default function LoginPage() {
   const [faceIdAvailable, setFaceIdAvailable] = useState(false);
   const [faceIdLoading, setFaceIdLoading] = useState(false);
   const router = useRouter();
+  const faceIdTriggered = useRef(false);
 
-  const handleFaceId = useCallback(async () => {
+  async function handleFaceId() {
     setError('');
     setFaceIdLoading(true);
 
@@ -40,14 +41,16 @@ export default function LoginPage() {
 
     if (verifyRes.ok) {
       router.push('/');
-      router.refresh();
     } else {
       setError('Face ID authentication failed');
     }
     setFaceIdLoading(false);
-  }, [router]);
+  }
 
   useEffect(() => {
+    if (faceIdTriggered.current) return;
+    faceIdTriggered.current = true;
+
     // Check if WebAuthn credentials exist, then auto-trigger Face ID
     fetch('/api/auth/webauthn/status')
       .then(r => r.json())
@@ -58,7 +61,7 @@ export default function LoginPage() {
         }
       })
       .catch(() => {});
-  }, [handleFaceId]);
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -89,7 +92,6 @@ export default function LoginPage() {
       }
 
       router.push('/');
-      router.refresh();
     } else {
       const data = await res.json();
       setError(data.error || 'Login failed');
